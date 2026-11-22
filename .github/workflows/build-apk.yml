@@ -38,16 +38,40 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Set up Gradle 9.3.1
-        uses: gradle/actions/setup-gradle@v4
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
         with:
-          gradle-version: "9.3.1"
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/libs.versions.toml') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Configure Android SDK and accept licenses
+        run: |
+          SDK_DIR="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_HOME=$SDK_DIR" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_DIR" >> "$GITHUB_ENV"
+          mkdir -p "$SDK_DIR/licenses"
+          SDKMANAGER="$(find "$SDK_DIR" -name sdkmanager -type f 2>/dev/null | head -n 1 || true)"
+          if [ -n "$SDKMANAGER" ]; then
+            (yes || true) | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+          fi
+          echo "Using Android SDK at: $SDK_DIR"
+
+      - name: Install Gradle 9.3.1
+        run: |
+          GRADLE_DIR="$RUNNER_TEMP/gradle-tool"
+          mkdir -p "$GRADLE_DIR"
+          curl -fsSL -o "$GRADLE_DIR/gradle.zip" "https://services.gradle.org/distributions/gradle-9.3.1-bin.zip"
+          unzip -q "$GRADLE_DIR/gradle.zip" -d "$GRADLE_DIR"
+          rm -f "$GRADLE_DIR/gradle.zip"
+          echo "$GRADLE_DIR/gradle-9.3.1/bin" >> "$GITHUB_PATH"
 
       - name: Prepare environment and debug keystore
         run: |
+          gradle --version
           if [ ! -f .env ] && [ -f .env.example ]; then
             cp .env.example .env
           fi
@@ -99,6 +123,8 @@ jobs:
       - name: Publish Direct Download Release
         if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.create_release == true) }}
         uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }}
           name: "Manoj & Sonali APK (${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }})"
