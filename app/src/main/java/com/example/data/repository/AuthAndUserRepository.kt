@@ -1,5 +1,6 @@
 package com.example.data.repository
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.os.Build
@@ -10,7 +11,6 @@ import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import com.example.BuildConfig
-import com.example.R
 import com.example.domain.model.ContactAddedVia
 import com.example.domain.model.PhoneLookupEntry
 import com.example.domain.model.SavedContact
@@ -82,13 +82,16 @@ class AuthAndUserRepository(
         auth.currentUser?.uid
             ?: throw IllegalStateException("User must be signed in before accessing Firestore.")
 
+    @SuppressLint("DiscouragedApi")
+    private fun resolveWebClientId(context: Context): String? {
+        val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
+        if (resId == 0) return null
+        return runCatching { context.getString(resId).takeIf { it.isNotBlank() } }.getOrNull()
+    }
+
     suspend fun attemptSilentGoogleSignIn(context: Context): Boolean {
         if (auth.currentUser != null) return true
-        val clientId = try {
-            context.getString(R.string.default_web_client_id)
-        } catch (_: Exception) {
-            return false
-        }
+        val clientId = resolveWebClientId(context) ?: return false
         return try {
             val credentialManager = CredentialManager.create(context)
             val googleIdOption = GetGoogleIdOption.Builder()
@@ -113,11 +116,8 @@ class AuthAndUserRepository(
     }
 
     suspend fun signInWithGoogleInteractive(activity: Activity): Result<FirebaseUser> {
-        val clientId = try {
-            activity.getString(R.string.default_web_client_id)
-        } catch (_: Exception) {
-            return Result.failure(IllegalStateException("Google Sign-In configuration missing."))
-        }
+        val clientId = resolveWebClientId(activity)
+            ?: return Result.failure(IllegalStateException("Google Sign-In configuration missing."))
         return try {
             val credentialManager = CredentialManager.create(activity)
             val signInOption = GetSignInWithGoogleOption.Builder(serverClientId = clientId).build()

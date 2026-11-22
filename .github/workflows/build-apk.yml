@@ -54,9 +54,23 @@ jobs:
           echo "ANDROID_HOME=$SDK_DIR" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$SDK_DIR" >> "$GITHUB_ENV"
           mkdir -p "$SDK_DIR/licenses"
-          SDKMANAGER="$(find "$SDK_DIR" -name sdkmanager -type f 2>/dev/null | head -n 1 || true)"
+          printf "\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e\n" > "$SDK_DIR/licenses/android-sdk-license"
+          printf "\n84831b9409646a918e30573bab4c9c91346d8abd\n" > "$SDK_DIR/licenses/android-sdk-preview-license"
+          printf "\n33b6a2b64607f11b759f320ef9dff4ae5c47d97a\n" > "$SDK_DIR/licenses/google-gdk-license"
+
+          SDKMANAGER=""
+          if [ -x "$SDK_DIR/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKMANAGER="$SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
+          else
+            SDKMANAGER="$(find "$SDK_DIR/cmdline-tools" -name sdkmanager -type f 2>/dev/null | head -n 1 || true)"
+          fi
+
           if [ -n "$SDKMANAGER" ]; then
+            echo "Using sdkmanager: $SDKMANAGER"
             (yes || true) | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+            "$SDKMANAGER" --install "platform-tools" "platforms;android-36.1" "build-tools;36.0.0" > /dev/null 2>&1 \
+              || "$SDKMANAGER" --install "platform-tools" "platforms;android-36" "build-tools;36.0.0" > /dev/null 2>&1 \
+              || true
           fi
           echo "Using Android SDK at: $SDK_DIR"
 
@@ -70,8 +84,16 @@ jobs:
           echo "$GRADLE_DIR/gradle-9.3.1/bin" >> "$GITHUB_PATH"
 
       - name: Prepare environment and debug keystore
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
           gradle --version
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+            echo "Restored app/google-services.json from GitHub Secret."
+          elif [ ! -f app/google-services.json ]; then
+            echo "Notice: app/google-services.json not present. APK will build cleanly, and you can add GOOGLE_SERVICES_JSON in GitHub Repo Secrets for full Firebase functionality."
+          fi
           if [ ! -f .env ] && [ -f .env.example ]; then
             cp .env.example .env
           fi
@@ -83,9 +105,32 @@ jobs:
               -keyalg RSA -keysize 2048 -validity 10000 \
               -dname "CN=Android Debug,O=Android,C=US"
           fi
+          ls -la app/
 
       - name: Build Debug APK
-        run: gradle assembleDebug --no-daemon --stacktrace
+        run: |
+          set -o pipefail
+          gradle assembleDebug \
+            --no-daemon \
+            --no-configuration-cache \
+            --console=plain \
+            --max-workers=2 \
+            -Dorg.gradle.jvmargs="-Xmx2560m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8" \
+            2>&1 | tee gradle-build.log
+
+      - name: Show concise error summary on failure
+        if: failure() && hashFiles('gradle-build.log') != ''
+        run: |
+          echo "=== Gradle Failure Summary ==="
+          grep -nE "^(e: |FAILURE:|\* What went wrong:|> Task .* FAILED|Caused by:|Execution failed)" gradle-build.log | tail -n 60 || tail -n 80 gradle-build.log
+
+      - name: Upload Build Log on failure
+        if: failure() && hashFiles('gradle-build.log') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-build-log
+          path: gradle-build.log
+          retention-days: 7
 
       - name: Build Signed Release APK (optional, when GitHub Secrets are set)
         env:
@@ -96,7 +141,8 @@ jobs:
         run: |
           if [ -n "$KEYSTORE_BASE64" ] && [ -n "$STORE_PASSWORD" ] && [ -n "$KEY_PASSWORD" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_PATH"
-            gradle assembleRelease --no-daemon --stacktrace
+            gradle assembleRelease --no-daemon --no-configuration-cache --console=plain --max-workers=2 \
+              -Dorg.gradle.jvmargs="-Xmx2560m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8"
           else
             echo "Release signing secrets not configured; skipping release APK (Debug APK already built)."
           fi
