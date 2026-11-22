@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">Manoj &amp; Sonali</string>
+    <string name="brand_title_upper">MANOJ &amp; SONALI</string>
+    <string name="tagline">Private, instant conversations crafted for closeness.</string>
+    <string name="sign_in_with_google">Sign in with Google</string>
+    <string name="continue_with_phone">Continue with Phone Number</string>
+    <string name="tab_chats">Chats</string>
+    <string name="tab_groups">Groups</string>
+    <string name="tab_calls">Calls</string>
+    <string name="tab_profile">Profile</string>
+    <string name="empty_chats_title">No conversations yet</string>
+    <string name="empty_chats_subtitle">Tap New Chat to discover people on Manoj &amp; Sonali and start messaging in real time.</string>
+    <string name="error_generic">Something went wrong. Please try again.</string>
+</resources>

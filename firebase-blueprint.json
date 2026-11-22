@@ -1,0 +1,217 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Public discoverable messaging profile for a Manoj & Sonali user (no PII).",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "about": { "type": "string" },
+        "online": { "type": "boolean" },
+        "discoverable": { "type": "boolean" },
+        "lastSeen": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["uid", "displayName", "online", "discoverable", "createdAt", "updatedAt"]
+    },
+    "UserPrivateSettings": {
+      "title": "UserPrivateSettings",
+      "description": "Owner-only PII, phone number, FCM token, blocked contacts, and privacy/notification settings.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "countryCode": { "type": "string" },
+        "email": { "type": "string" },
+        "fcmToken": { "type": "string" },
+        "lastSeenVisible": { "type": "boolean" },
+        "onlineVisible": { "type": "boolean" },
+        "readReceiptsEnabled": { "type": "boolean" },
+        "notifyMessages": { "type": "boolean" },
+        "notifyGroups": { "type": "boolean" },
+        "notifyCalls": { "type": "boolean" },
+        "notifyStatus": { "type": "boolean" },
+        "darkThemeMode": { "type": "string", "enum": ["SYSTEM", "LIGHT", "DARK"] },
+        "blockedUserIds": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["uid", "createdAt", "updatedAt"]
+    },
+    "ChatRoom": {
+      "title": "ChatRoom",
+      "description": "1-to-1 conversation metadata between two participants.",
+      "type": "object",
+      "properties": {
+        "participantIds": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "lastMessage": { "type": "string" },
+        "lastMessageType": { "type": "string" },
+        "lastMessageSenderId": { "type": "string" },
+        "lastMessageTime": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "typingUserIds": { "type": "array" },
+        "pinnedBy": { "type": "array" },
+        "mutedBy": { "type": "array" },
+        "unreadCounts": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["participantIds", "createdBy", "createdAt", "updatedAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Real-time message in a 1-to-1 chat with denormalized participantIds.",
+      "type": "object",
+      "properties": {
+        "chatId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "participantIds": { "type": "array" },
+        "type": { "type": "string", "enum": ["TEXT", "IMAGE", "VIDEO", "DOCUMENT", "AUDIO", "VOICE"] },
+        "text": { "type": "string" },
+        "mediaUrl": { "type": "string" },
+        "mediaName": { "type": "string" },
+        "mediaSizeBytes": { "type": "integer" },
+        "voiceDurationMs": { "type": "integer" },
+        "replyToId": { "type": "string" },
+        "replyToText": { "type": "string" },
+        "replyToSender": { "type": "string" },
+        "forwarded": { "type": "boolean" },
+        "deliveryStatus": { "type": "string", "enum": ["SENT", "DELIVERED", "READ"] },
+        "reactions": { "type": "object" },
+        "editedAt": { "type": "string", "format": "date-time" },
+        "deletedAt": { "type": "string", "format": "date-time" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["chatId", "senderId", "participantIds", "type", "deliveryStatus", "timestamp", "updatedAt"]
+    },
+    "GroupChat": {
+      "title": "GroupChat",
+      "description": "Multi-member group conversation with admin controls.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "memberIds": { "type": "array" },
+        "adminIds": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "lastMessage": { "type": "string" },
+        "lastMessageSenderName": { "type": "string" },
+        "lastMessageTime": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "mutedBy": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["name", "memberIds", "adminIds", "createdBy", "createdAt", "updatedAt"]
+    },
+    "GroupMessage": {
+      "title": "GroupMessage",
+      "description": "Real-time message in a group conversation with denormalized memberIds.",
+      "type": "object",
+      "properties": {
+        "groupId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "memberIds": { "type": "array" },
+        "type": { "type": "string", "enum": ["TEXT", "IMAGE", "VIDEO", "DOCUMENT", "AUDIO", "VOICE"] },
+        "text": { "type": "string" },
+        "mediaUrl": { "type": "string" },
+        "mediaName": { "type": "string" },
+        "mediaSizeBytes": { "type": "integer" },
+        "voiceDurationMs": { "type": "integer" },
+        "replyToId": { "type": "string" },
+        "replyToText": { "type": "string" },
+        "replyToSender": { "type": "string" },
+        "reactions": { "type": "object" },
+        "editedAt": { "type": "string", "format": "date-time" },
+        "deletedAt": { "type": "string", "format": "date-time" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["groupId", "senderId", "memberIds", "type", "timestamp", "updatedAt"]
+    },
+    "UserStatus": {
+      "title": "UserStatus",
+      "description": "24-hour expiring status story with viewer tracking and privacy.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userPhotoUrl": { "type": "string" },
+        "caption": { "type": "string" },
+        "mediaUrl": { "type": "string" },
+        "type": { "type": "string", "enum": ["TEXT", "IMAGE", "VIDEO"] },
+        "backgroundColorHex": { "type": "string" },
+        "privacy": { "type": "string", "enum": ["ALL_CONTACTS", "ONLY_ME"] },
+        "viewerIds": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["userId", "userName", "type", "privacy", "createdAt", "expiresAt", "updatedAt"]
+    },
+    "CallSession": {
+      "title": "CallSession",
+      "description": "Voice or video call signaling and call history record.",
+      "type": "object",
+      "properties": {
+        "callerId": { "type": "string" },
+        "callerName": { "type": "string" },
+        "callerPhotoUrl": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "receiverName": { "type": "string" },
+        "receiverPhotoUrl": { "type": "string" },
+        "participantIds": { "type": "array" },
+        "callType": { "type": "string", "enum": ["VOICE", "VIDEO"] },
+        "status": { "type": "string", "enum": ["RINGING", "ACCEPTED", "REJECTED", "ENDED", "MISSED"] },
+        "offerSdp": { "type": "string" },
+        "answerSdp": { "type": "string" },
+        "callerCandidates": { "type": "array" },
+        "receiverCandidates": { "type": "array" },
+        "startedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "endedAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["callerId", "receiverId", "participantIds", "callType", "status", "startedAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Public discoverable user profile documents"
+    },
+    "/users/{userId}/private/{configId}": {
+      "schema": { "$ref": "#/entities/UserPrivateSettings" },
+      "description": "Private owner-only PII, phone number, FCM token, and app preferences"
+    },
+    "/chats/{chatId}": {
+      "schema": { "$ref": "#/entities/ChatRoom" },
+      "description": "1-to-1 chat room metadata"
+    },
+    "/chats/{chatId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Messages inside a 1-to-1 chat room"
+    },
+    "/groups/{groupId}": {
+      "schema": { "$ref": "#/entities/GroupChat" },
+      "description": "Group chat metadata and membership"
+    },
+    "/groups/{groupId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/GroupMessage" },
+      "description": "Messages inside a group chat"
+    },
+    "/statuses/{statusId}": {
+      "schema": { "$ref": "#/entities/UserStatus" },
+      "description": "24-hour expiring status updates"
+    },
+    "/calls/{callId}": {
+      "schema": { "$ref": "#/entities/CallSession" },
+      "description": "WebRTC signaling sessions and call logs"
+    }
+  }
+}

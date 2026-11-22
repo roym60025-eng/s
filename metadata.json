@@ -1,0 +1,6 @@
+{
+  "name": "Manoj & Sonali",
+  "description": "A modern real-time Android messaging, group chat, status, and voice/video calling application built with Jetpack Compose, Material 3, and Firebase.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
