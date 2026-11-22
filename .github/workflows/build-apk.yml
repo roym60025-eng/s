@@ -1,0 +1,106 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: "Publish APK as a GitHub Release (direct .apk download without zip)"
+        required: false
+        type: boolean
+        default: true
+      release_tag:
+        description: "Release tag name (used when creating a Release via manual run)"
+        required: false
+        type: string
+        default: "latest-apk"
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    name: Assemble Manoj & Sonali APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.3.1"
+
+      - name: Prepare environment and debug keystore
+        run: |
+          if [ ! -f .env ] && [ -f .env.example ]; then
+            cp .env.example .env
+          fi
+          if [ -f debug.keystore.base64 ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
+          elif [ ! -f debug.keystore ]; then
+            keytool -genkey -v -keystore debug.keystore \
+              -storepass android -alias androiddebugkey -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - name: Build Debug APK
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Build Signed Release APK (optional, when GitHub Secrets are set)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$STORE_PASSWORD" ] && [ -n "$KEY_PASSWORD" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_PATH"
+            gradle assembleRelease --no-daemon --stacktrace
+          else
+            echo "Release signing secrets not configured; skipping release APK (Debug APK already built)."
+          fi
+
+      - name: Collect APK files
+        run: |
+          mkdir -p dist-apk
+          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp app/build/outputs/apk/debug/app-debug.apk dist-apk/Manoj-and-Sonali-debug.apk
+          fi
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            cp app/build/outputs/apk/release/app-release.apk dist-apk/Manoj-and-Sonali-release.apk
+          fi
+          ls -lh dist-apk/
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Manoj-and-Sonali-APK
+          path: dist-apk/*.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Publish Direct Download Release
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.create_release == true) }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }}
+          name: "Manoj & Sonali APK (${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }})"
+          files: dist-apk/*.apk
+          generate_release_notes: true
