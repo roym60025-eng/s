@@ -16,8 +16,8 @@ android {
     applicationId = "com.aistudio.manojsonali.vxqrmt"
     minSdk = 26
     targetSdk = 36
-    versionCode = 2
-    versionName = "1.1"
+    versionCode = 3
+    versionName = "1.2"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -123,6 +123,7 @@ dependencies {
   implementation(libs.androidx.work.runtime.ktx)
   implementation(libs.stream.webrtc.android)
   implementation(libs.mlkit.barcode.scanning)
+  implementation(libs.androidx.graphics.path)
   implementation(libs.zxing.core)
   // implementation(libs.firebase.appcheck.recaptcha)
   // implementation(libs.firebase.appcheck.debug)

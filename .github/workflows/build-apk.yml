@@ -166,7 +166,7 @@ jobs:
           if [ -n "$APKSIGNER" ]; then
             for apk in dist-apk/*.apk; do
               echo "Verifying $apk ..."
-              "$APKSIGNER" verify --verbose "$apk"
+              "$APKSIGNER" verify --verbose --print-certs "$apk"
             done
           fi
           ls -lh dist-apk/
