@@ -180,12 +180,12 @@ jobs:
           if-no-files-found: error
 
       - name: Publish Direct Download Release
-        if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.create_release == true) }}
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.create_release == true }}
         uses: softprops/action-gh-release@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }}
-          name: "Manoj & Sonali APK (${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }})"
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag || 'latest-apk' }}
+          name: "Manoj & Sonali APK (${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag || 'latest-apk' }})"
           files: dist-apk/*.apk
           generate_release_notes: true
