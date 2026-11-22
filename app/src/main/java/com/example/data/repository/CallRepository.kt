@@ -3,6 +3,7 @@ package com.example.data.repository
 import com.example.domain.model.CallSession
 import com.example.domain.model.CallStatus
 import com.example.domain.model.CallType
+import com.example.security.InputValidator
 import com.example.security.OperationType
 import com.example.security.handleFirestoreError
 import com.google.firebase.Firebase
@@ -88,7 +89,7 @@ class CallRepository(
             val uid = requireUserId()
             val ref = db.collection("calls").document()
             path = ref.path
-            val payload = mutableMapOf<String, Any?>(
+            val payload = InputValidator.nonNullFields(
                 "callerId" to uid,
                 "callerName" to callerName.take(80),
                 "callerPhotoUrl" to callerPhotoUrl,
@@ -102,7 +103,7 @@ class CallRepository(
                 "receiverCandidates" to emptyList<String>(),
                 "startedAt" to FieldValue.serverTimestamp(),
                 "updatedAt" to FieldValue.serverTimestamp()
-            ).filterValues { it != null } as Map<String, Any>
+            )
             ref.set(payload).await()
             Result.success(ref.id)
         } catch (e: CancellationException) {

@@ -180,3 +180,39 @@ test("Calls: terminal state locking prevents reopening ENDED/REJECTED calls", as
     })
   );
 });
+
+test("Contacts & PhoneLookup: owner-only saved contacts and anti-scraping get-only phone lookup", async () => {
+  const manojDb = testEnv.authenticatedContext(MANOJ_UID).firestore();
+  const sonaliDb = testEnv.authenticatedContext(SONALI_UID).firestore();
+  const now = new Date(Date.now() - 1000);
+
+  // Manoj publishes his exact-match phone lookup doc
+  await assertSucceeds(
+    manojDb.collection("phoneLookup").doc("919876543210").set({
+      uid: MANOJ_UID,
+      displayName: "Manoj",
+      createdAt: now,
+      updatedAt: now,
+    })
+  );
+
+  // Sonali can look up exact phone number via get, but CANNOT list/scrape phoneLookup
+  await assertSucceeds(sonaliDb.collection("phoneLookup").doc("919876543210").get());
+  await assertFails(sonaliDb.collection("phoneLookup").get());
+
+  // Sonali saves Manoj into her private contacts subcollection
+  await assertSucceeds(
+    sonaliDb.collection("users").doc(SONALI_UID).collection("contacts").doc(MANOJ_UID).set({
+      contactUid: MANOJ_UID,
+      displayName: "Manoj",
+      addedVia: "PHONE",
+      phoneNumber: "+919876543210",
+      createdAt: now,
+      updatedAt: now,
+    })
+  );
+
+  // Manoj cannot read Sonali's private saved contacts
+  await assertFails(manojDb.collection("users").doc(SONALI_UID).collection("contacts").get());
+});
+

@@ -119,7 +119,7 @@ class GroupRepository(
             val members = (memberIds + uid).distinct().take(100)
             val ref = db.collection("groups").document()
             path = ref.path
-            val payload = mutableMapOf<String, Any?>(
+            val payload = InputValidator.nonNullFields(
                 "name" to cleanName,
                 "description" to description.trim().take(InputValidator.MAX_GROUP_DESC),
                 "imageUrl" to imageUrl,
@@ -131,7 +131,7 @@ class GroupRepository(
                 "mutedBy" to emptyList<String>(),
                 "createdAt" to FieldValue.serverTimestamp(),
                 "updatedAt" to FieldValue.serverTimestamp()
-            ).filterValues { it != null } as Map<String, Any>
+            )
             ref.set(payload).await()
             Result.success(ref.id)
         } catch (e: CancellationException) {
@@ -163,7 +163,7 @@ class GroupRepository(
             }
             val ref = db.collection("groups").document(groupId).collection("messages").document()
             path = ref.path
-            val payload = mutableMapOf<String, Any?>(
+            val payload = InputValidator.nonNullFields(
                 "groupId" to groupId,
                 "senderId" to uid,
                 "senderName" to senderName.take(80),
@@ -180,7 +180,7 @@ class GroupRepository(
                 "reactions" to emptyMap<String, String>(),
                 "timestamp" to FieldValue.serverTimestamp(),
                 "updatedAt" to FieldValue.serverTimestamp()
-            ).filterValues { it != null } as Map<String, Any>
+            )
             ref.set(payload).await()
 
             val summary = when (type) {

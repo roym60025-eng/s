@@ -33,6 +33,10 @@ import com.example.calls.ActiveCallScreen
 import com.example.calls.CallHistoryTabContent
 import com.example.calls.CallsViewModel
 import com.example.calls.IncomingCallBanner
+import com.example.contacts.AddContactScreen
+import com.example.contacts.AddContactTab
+import com.example.contacts.ContactsViewModel
+import com.example.contacts.MyQrCodeScreen
 import com.example.di.AppContainer
 import com.example.domain.model.CallType
 import com.example.groups.CreateGroupScreen
@@ -52,7 +56,7 @@ import com.example.settings.SettingsScreen
 import com.example.status.CreateStatusScreen
 import com.example.status.StatusViewModel
 import com.example.status.StatusViewerScreen
-import com.google.firebase.messaging.FirebaseMessaging
+import com.google.firebase.installations.FirebaseInstallations
 import kotlinx.coroutines.tasks.await
 
 object Routes {
@@ -67,12 +71,15 @@ object Routes {
     const val EDIT_PROFILE = "edit_profile"
     const val SETTINGS = "settings"
     const val BLOCKED_CONTACTS = "blocked_contacts"
+    const val ADD_CONTACT = "add_contact/{mode}"
+    const val MY_QR_CODE = "my_qr_code"
 
     fun chatDetail(chatId: String) = "chat_detail/$chatId"
     fun groupChat(groupId: String) = "group_chat/$groupId"
     fun groupInfo(groupId: String) = "group_info/$groupId"
     fun viewStatus(userId: String) = "view_status/$userId"
     fun activeCall(callId: String) = "active_call/$callId"
+    fun addContact(tab: AddContactTab) = "add_contact/${tab.name}"
 }
 
 @Composable
@@ -140,9 +147,9 @@ private fun AuthenticatedShell(
             container.authAndUserRepository.updatePresence(true)
         }
         try {
-            val token = FirebaseMessaging.getInstance().token.await()
-            if (!token.isNullOrBlank()) {
-                container.authAndUserRepository.saveFcmToken(token)
+            val installationId = FirebaseInstallations.getInstance().id.await()
+            if (!installationId.isNullOrBlank()) {
+                container.authAndUserRepository.saveFcmToken(installationId)
             }
         } catch (_: Exception) {
         }
@@ -254,6 +261,19 @@ private fun AuthenticatedShell(
         }
     )
 
+    val contactsViewModel: ContactsViewModel = viewModel(
+        key = "contacts_$currentUserId",
+        factory = viewModelFactory {
+            initializer {
+                ContactsViewModel(
+                    currentUserId = currentUserId,
+                    authRepository = container.authAndUserRepository,
+                    chatRepository = container.chatRepository
+                )
+            }
+        }
+    )
+
     val incomingCall by homeViewModel.incomingCall.collectAsStateWithLifecycle()
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -266,6 +286,7 @@ private fun AuthenticatedShell(
                     onCreateGroup = { navController.navigate(Routes.CREATE_GROUP) },
                     onCreateStatus = { navController.navigate(Routes.CREATE_STATUS) },
                     onViewUserStatuses = { uid -> navController.navigate(Routes.viewStatus(uid)) },
+                    onOpenAddContact = { tab -> navController.navigate(Routes.addContact(tab)) },
                     onStartVoiceCall = { peer ->
                         callsViewModel.startOutgoingCall(peer, CallType.VOICE) { callId ->
                             navController.navigate(Routes.activeCall(callId))
@@ -297,7 +318,9 @@ private fun AuthenticatedShell(
                         ProfileTabContent(
                             viewModel = profileSettingsViewModel,
                             onEditProfile = { navController.navigate(Routes.EDIT_PROFILE) },
-                            onOpenSettings = { navController.navigate(Routes.SETTINGS) }
+                            onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                            onOpenMyQr = { navController.navigate(Routes.MY_QR_CODE) },
+                            onOpenAddContact = { navController.navigate(Routes.addContact(AddContactTab.PHONE)) }
                         )
                     }
                 )
@@ -428,6 +451,42 @@ private fun AuthenticatedShell(
                 BlockedContactsScreen(
                     viewModel = profileSettingsViewModel,
                     onBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(
+                route = Routes.ADD_CONTACT,
+                arguments = listOf(navArgument("mode") { type = NavType.StringType })
+            ) { entry ->
+                val modeStr = entry.arguments?.getString("mode").orEmpty()
+                val initialTab = if (modeStr == AddContactTab.QR_SCAN.name) {
+                    AddContactTab.QR_SCAN
+                } else {
+                    AddContactTab.PHONE
+                }
+                AddContactScreen(
+                    initialTab = initialTab,
+                    viewModel = contactsViewModel,
+                    onBack = { navController.popBackStack() },
+                    onOpenMyQr = { navController.navigate(Routes.MY_QR_CODE) },
+                    onOpenChat = { chatId ->
+                        navController.navigate(Routes.chatDetail(chatId)) {
+                            popUpTo(Routes.HOME) { inclusive = false }
+                        }
+                    },
+                    onStartVoiceCall = { peer ->
+                        callsViewModel.startOutgoingCall(peer, CallType.VOICE) { callId ->
+                            navController.navigate(Routes.activeCall(callId))
+                        }
+                    }
+                )
+            }
+
+            composable(Routes.MY_QR_CODE) {
+                MyQrCodeScreen(
+                    viewModel = contactsViewModel,
+                    onBack = { navController.popBackStack() },
+                    onOpenScanner = { navController.navigate(Routes.addContact(AddContactTab.QR_SCAN)) }
                 )
             }
         }

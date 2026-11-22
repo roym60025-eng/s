@@ -11,6 +11,7 @@ import com.example.domain.model.CallSession
 import com.example.domain.model.CallStatus
 import com.example.domain.model.ChatRoom
 import com.example.domain.model.GroupChat
+import com.example.domain.model.SavedContact
 import com.example.domain.model.UiState
 import com.example.domain.model.UserPrivateSettings
 import com.example.domain.model.UserProfile
@@ -60,6 +61,10 @@ class HomeViewModel(
         .map { list -> list.associateBy { it.uid } }
         .catch { unwrapFirestoreError(it); emit(emptyMap()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyMap())
+
+    val savedContacts: StateFlow<List<SavedContact>> = authRepository.observeSavedContacts()
+        .catch { unwrapFirestoreError(it); emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
 
     val chatsState: StateFlow<UiState<List<ChatRoom>>> = combine(
         chatRepository.observeMyChats(),

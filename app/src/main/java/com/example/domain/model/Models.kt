@@ -68,6 +68,14 @@ enum class ThemeMode {
     }
 }
 
+enum class ContactAddedVia {
+    PHONE, QR, DIRECTORY;
+    companion object {
+        fun fromRaw(raw: String?): ContactAddedVia =
+            entries.firstOrNull { it.name == raw } ?: PHONE
+    }
+}
+
 @Keep
 @IgnoreExtraProperties
 data class UserProfile(
@@ -249,3 +257,30 @@ data class CallSession(
     val typeEnum: CallType get() = CallType.fromRaw(callType)
     val statusEnum: CallStatus get() = CallStatus.fromRaw(status)
 }
+
+@Keep
+@IgnoreExtraProperties
+data class SavedContact(
+    @DocumentId val id: String = "",
+    val contactUid: String = "",
+    val displayName: String = "",
+    val photoUrl: String? = null,
+    val about: String = "",
+    val phoneNumber: String? = null,
+    val addedVia: String = ContactAddedVia.PHONE.name,
+    @ServerTimestamp val createdAt: Timestamp? = null,
+    @ServerTimestamp val updatedAt: Timestamp? = null
+) {
+    val viaEnum: ContactAddedVia get() = ContactAddedVia.fromRaw(addedVia)
+}
+
+@Keep
+@IgnoreExtraProperties
+data class PhoneLookupEntry(
+    @DocumentId val id: String = "",
+    val uid: String = "",
+    val displayName: String = "",
+    val photoUrl: String? = null,
+    @ServerTimestamp val createdAt: Timestamp? = null,
+    @ServerTimestamp val updatedAt: Timestamp? = null
+)

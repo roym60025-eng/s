@@ -55,4 +55,62 @@ object InputValidator {
 
     fun sanitizeId(raw: String): String =
         raw.replace(Regex("[^a-zA-Z0-9_\\-]"), "_").take(128)
+
+    fun nonNullFields(vararg pairs: Pair<String, Any?>): Map<String, Any> = buildMap {
+        for ((key, value) in pairs) {
+            if (value != null) put(key, value)
+        }
+    }
+
+    fun phoneLookupKey(dialCode: String, localOrFullNumber: String): String? {
+        val trimmed = localOrFullNumber.trim()
+        val rawDigits = trimmed.filter { it.isDigit() }
+        if (rawDigits.length < 6) return null
+        val key = if (trimmed.startsWith("+")) {
+            rawDigits
+        } else {
+            val codeDigits = dialCode.filter { it.isDigit() }
+            if (codeDigits.isNotEmpty() && !rawDigits.startsWith(codeDigits)) {
+                codeDigits + rawDigits
+            } else {
+                rawDigits
+            }
+        }
+        return if (key.length in 6..15 && key.all { it.isDigit() }) key else null
+    }
+
+    fun buildContactQrPayload(uid: String): String = "manojsonali://contact?uid=$uid"
+
+    sealed interface ScannedContactTarget {
+        data class ByUid(val uid: String) : ScannedContactTarget
+        data class ByPhone(val rawPhone: String) : ScannedContactTarget
+    }
+
+    fun parseContactQrPayload(raw: String): ScannedContactTarget? {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return null
+
+        if (trimmed.startsWith("manojsonali://", ignoreCase = true)) {
+            val uidParam = android.net.Uri.parse(trimmed).getQueryParameter("uid")?.trim()
+            if (!uidParam.isNullOrBlank() && uidParam.matches(Regex("^[a-zA-Z0-9_\\-]{1,128}$"))) {
+                return ScannedContactTarget.ByUid(uidParam)
+            }
+        }
+        if (trimmed.startsWith("tel:", ignoreCase = true)) {
+            val phone = trimmed.removePrefix("tel:").removePrefix("TEL:").trim()
+            if (phone.filter { it.isDigit() }.length in 6..15) {
+                return ScannedContactTarget.ByPhone(phone)
+            }
+        }
+        if (trimmed.matches(Regex("^\\+?[0-9\\s\\-()]{6,20}$"))) {
+            val digits = trimmed.filter { it.isDigit() }
+            if (digits.length in 6..15) {
+                return ScannedContactTarget.ByPhone(trimmed)
+            }
+        }
+        if (trimmed.matches(Regex("^[a-zA-Z0-9_\\-]{12,128}$"))) {
+            return ScannedContactTarget.ByUid(trimmed)
+        }
+        return null
+    }
 }

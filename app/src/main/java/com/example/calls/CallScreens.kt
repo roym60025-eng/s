@@ -28,13 +28,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallMade
 import androidx.compose.material.icons.automirrored.filled.CallMissed
 import androidx.compose.material.icons.automirrored.filled.CallReceived
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Videocam
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -224,10 +224,11 @@ fun ActiveCallScreen(
 
     val current = session
     val isCaller = current?.callerId == viewModel.currentUserId
-    val peerName = if (isCaller) current?.receiverName else current?.callerName
-    val peerPhoto = if (isCaller) current?.receiverPhotoUrl else current?.callerPhotoUrl
+    val peerName = if (isCaller) current.receiverName else current?.callerName
+    val peerPhoto = if (isCaller) current.receiverPhotoUrl else current?.callerPhotoUrl
     val isVideo = current?.typeEnum == CallType.VIDEO
-    val isIncomingRinging = current != null && !isCaller && current.statusEnum == CallStatus.RINGING
+    val incomingSession = current?.takeIf { !isCaller && it.statusEnum == CallStatus.RINGING }
+    val isIncomingRinging = incomingSession != null
 
     Box(
         modifier = Modifier
@@ -292,19 +293,19 @@ fun ActiveCallScreen(
                 )
             }
 
-            if (isIncomingRinging && current != null) {
+            if (incomingSession != null) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     IconButton(
-                        onClick = { viewModel.rejectCall(current.id); onCallClosed() },
+                        onClick = { viewModel.rejectCall(incomingSession.id); onCallClosed() },
                         modifier = Modifier.size(68.dp).clip(CircleShape).background(DangerRose)
                     ) {
                         Icon(Icons.Default.CallEnd, contentDescription = "Decline", tint = Color.White, modifier = Modifier.size(30.dp))
                     }
                     IconButton(
-                        onClick = { viewModel.acceptIncomingCall(current, hasPermissions, hasCameraPermission) },
+                        onClick = { viewModel.acceptIncomingCall(incomingSession, hasPermissions, hasCameraPermission) },
                         modifier = Modifier.size(68.dp).clip(CircleShape).background(OnlineEmerald)
                     ) {
                         Icon(Icons.Default.Call, contentDescription = "Accept", tint = Color.White, modifier = Modifier.size(30.dp))
@@ -339,7 +340,7 @@ fun ActiveCallScreen(
                             .background(if (isSpeaker) Color.White else Color.White.copy(alpha = 0.16f))
                     ) {
                         Icon(
-                            Icons.Default.VolumeUp,
+                            Icons.AutoMirrored.Filled.VolumeUp,
                             contentDescription = "Speaker",
                             tint = if (isSpeaker) Color.Black else Color.White
                         )

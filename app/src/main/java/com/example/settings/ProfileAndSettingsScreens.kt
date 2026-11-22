@@ -30,11 +30,14 @@ import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -69,7 +72,9 @@ import com.example.profile.ProfileSettingsViewModel
 fun ProfileTabContent(
     viewModel: ProfileSettingsViewModel,
     onEditProfile: () -> Unit,
-    onOpenSettings: () -> Unit
+    onOpenSettings: () -> Unit,
+    onOpenMyQr: () -> Unit,
+    onOpenAddContact: () -> Unit
 ) {
     val context = LocalContext.current
     val profile by viewModel.userProfile.collectAsStateWithLifecycle()
@@ -134,6 +139,32 @@ fun ProfileTabContent(
         }
 
         Spacer(modifier = Modifier.height(20.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            FilledTonalButton(
+                onClick = onOpenMyQr,
+                modifier = Modifier.weight(1f).height(50.dp).testTag("profile_my_qr_button"),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(Icons.Default.QrCode2, contentDescription = null)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("My QR Code")
+            }
+            FilledTonalButton(
+                onClick = onOpenAddContact,
+                modifier = Modifier.weight(1f).height(50.dp).testTag("profile_add_contact_button"),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(Icons.Default.PersonAdd, contentDescription = null)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Add Contact")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
 
         Button(
             onClick = onEditProfile,

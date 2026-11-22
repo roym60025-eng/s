@@ -30,6 +30,7 @@ app/src/main/java/com/example/
 ├── groups/                        # Group creation, messaging, admin/member controls
 ├── status/                        # 24-hour text/photo/video statuses & viewer tracking
 ├── calls/                         # WebRTC PeerConnection manager + incoming/outgoing/active call UI
+├── contacts/                      # Add Contact by Phone Number, CameraX+ML Kit QR Scanner, My QR Code
 ├── notifications/                 # FCM service & WorkManager 24h status cleanup worker
 ├── profile/ & settings/           # Profile editing, theme, notification & privacy settings
 └── ui/theme/                      # Color tokens, local Outfit/Plus Jakarta Sans typography, M3 theme
@@ -80,7 +81,7 @@ firebase emulators:exec --only firestore --project test-project \
 ## Security Architecture & Known Limitations
 
 - **Zero-Trust Firestore Rules**: Global default-deny (`allow read, write: if false`) with per-collection field allowlists, immutable ownership fields, server timestamp checks, and denormalized participant arrays on message subcollections.
-- **PII Separation**: Phone numbers, emails, FCM tokens, blocked user IDs, and privacy preferences live under `/users/{userId}/private/settings` (owner-only read/write), keeping `/users/{userId}` free of sensitive PII.
+- **PII Separation & Contact Lookup**: Phone numbers, emails, FCM tokens, blocked user IDs, and privacy preferences live under `/users/{userId}/private/settings` (owner-only read/write), and saved contacts are owner-only under `/users/{userId}/contacts/{contactId}`. Exact-match number discovery uses `/phoneLookup/{phoneKey}` with `allow get: if isSignedIn(); allow list: if false;` to prevent phone number enumeration.
 - **Transport & Local Protection**: Network communication uses Firebase TLS transport encryption and Android Keystore (`AES/GCM/NoPadding`) for local preference protection. **End-to-End Encryption (E2EE) is not implemented** (no Signal-protocol key exchange is performed between devices).
 - **WebRTC TURN/NAT Traversal**: `WebRtcCallManager` configures Google STUN servers (`stun:stun.l.google.com:19302`) and exchanges SDP/ICE via Firestore (`calls/{callId}`). Calls behind strict symmetric NATs or corporate firewalls require adding a dedicated TURN server in `WebRtcCallManager`.
 - **SMS Phone Auth & Play Services**: Firebase Phone Authentication SMS delivery requires a real device or Google Play-enabled emulator with Firebase Console Phone Auth active; Credential Manager Google Sign-In is available alongside it.

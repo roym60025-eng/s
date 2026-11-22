@@ -25,11 +25,11 @@ class ManojSonaliMessagingService : FirebaseMessagingService() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    override fun onNewToken(token: String) {
-        super.onNewToken(token)
+    override fun onRegistered(installationId: String) {
+        super.onRegistered(installationId)
         val app = applicationContext as? ManojSonaliApp ?: return
         serviceScope.launch {
-            app.container.authAndUserRepository.saveFcmToken(token)
+            app.container.authAndUserRepository.saveFcmToken(installationId)
         }
     }
 

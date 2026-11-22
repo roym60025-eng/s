@@ -178,6 +178,35 @@
         "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
       },
       "required": ["callerId", "receiverId", "participantIds", "callType", "status", "startedAt", "updatedAt"]
+    },
+    "SavedContact": {
+      "title": "SavedContact",
+      "description": "User-saved contact added by phone number, QR scan, or directory.",
+      "type": "object",
+      "properties": {
+        "contactUid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "about": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "addedVia": { "type": "string", "enum": ["PHONE", "QR", "DIRECTORY"] },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["contactUid", "displayName", "addedVia", "createdAt", "updatedAt"]
+    },
+    "PhoneLookupEntry": {
+      "title": "PhoneLookupEntry",
+      "description": "Privacy-preserving exact-match phone lookup index (get-only, list-denied).",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["uid", "displayName", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -208,6 +237,14 @@
     "/statuses/{statusId}": {
       "schema": { "$ref": "#/entities/UserStatus" },
       "description": "24-hour expiring status updates"
+    },
+    "/users/{userId}/contacts/{contactId}": {
+      "schema": { "$ref": "#/entities/SavedContact" },
+      "description": "User's saved contacts subcollection"
+    },
+    "/phoneLookup/{phoneKey}": {
+      "schema": { "$ref": "#/entities/PhoneLookupEntry" },
+      "description": "Exact-match phone number to UID lookup index"
     },
     "/calls/{callId}": {
       "schema": { "$ref": "#/entities/CallSession" },

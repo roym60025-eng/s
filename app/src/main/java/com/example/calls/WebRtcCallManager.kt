@@ -207,8 +207,8 @@ class WebRtcCallManager(
             mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"))
         }
         pc.createOffer(object : SimpleSdpObserver() {
-            override fun onCreateSuccess(sdp: SessionDescription?) {
-                val desc = sdp ?: return
+            override fun onCreateSuccess(p0: SessionDescription?) {
+                val desc = p0 ?: return
                 pc.setLocalDescription(SimpleSdpObserver(), desc)
                 scope.launch {
                     callRepository.publishOfferSdp(callId, desc.description)
@@ -228,8 +228,8 @@ class WebRtcCallManager(
                     mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"))
                 }
                 pc.createAnswer(object : SimpleSdpObserver() {
-                    override fun onCreateSuccess(answer: SessionDescription?) {
-                        val ans = answer ?: return
+                    override fun onCreateSuccess(p0: SessionDescription?) {
+                        val ans = p0 ?: return
                         pc.setLocalDescription(SimpleSdpObserver(), ans)
                         scope.launch {
                             callRepository.acceptCallWithAnswer(callId, ans.description)

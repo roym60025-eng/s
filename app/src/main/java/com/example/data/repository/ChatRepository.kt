@@ -169,7 +169,7 @@ class ChatRepository(
             val msgRef = db.collection("chats").document(chatId).collection("messages").document()
             path = msgRef.path
 
-            val payload = mutableMapOf<String, Any?>(
+            val payload = InputValidator.nonNullFields(
                 "chatId" to chatId,
                 "senderId" to uid,
                 "senderName" to senderName.take(80),
@@ -181,14 +181,14 @@ class ChatRepository(
                 "mediaSizeBytes" to mediaSizeBytes,
                 "voiceDurationMs" to voiceDurationMs,
                 "replyToId" to replyTo?.id,
-                "replyToText" to (replyTo?.text?.take(300)),
-                "replyToSender" to (replyTo?.senderName?.take(80)),
+                "replyToText" to replyTo?.text?.take(300),
+                "replyToSender" to replyTo?.senderName?.take(80),
                 "forwarded" to forwarded,
                 "deliveryStatus" to DeliveryStatus.SENT.name,
                 "reactions" to emptyMap<String, String>(),
                 "timestamp" to FieldValue.serverTimestamp(),
                 "updatedAt" to FieldValue.serverTimestamp()
-            ).filterValues { it != null } as Map<String, Any>
+            )
 
             msgRef.set(payload).await()
 

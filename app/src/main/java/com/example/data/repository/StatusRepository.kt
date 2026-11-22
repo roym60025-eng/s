@@ -81,7 +81,7 @@ class StatusRepository(
             val ref = db.collection("statuses").document()
             path = ref.path
             val expiresAt = Timestamp(Date(System.currentTimeMillis() + 24L * 60L * 60L * 1000L))
-            val payload = mutableMapOf<String, Any?>(
+            val payload = InputValidator.nonNullFields(
                 "userId" to uid,
                 "userName" to userName.take(80),
                 "userPhotoUrl" to userPhotoUrl,
@@ -94,7 +94,7 @@ class StatusRepository(
                 "createdAt" to FieldValue.serverTimestamp(),
                 "expiresAt" to expiresAt,
                 "updatedAt" to FieldValue.serverTimestamp()
-            ).filterValues { it != null } as Map<String, Any>
+            )
             ref.set(payload).await()
             Result.success(Unit)
         } catch (e: CancellationException) {

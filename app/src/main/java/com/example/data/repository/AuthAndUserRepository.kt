@@ -11,6 +11,9 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import com.example.BuildConfig
 import com.example.R
+import com.example.domain.model.ContactAddedVia
+import com.example.domain.model.PhoneLookupEntry
+import com.example.domain.model.SavedContact
 import com.example.domain.model.ThemeMode
 import com.example.domain.model.UserPrivateSettings
 import com.example.domain.model.UserProfile
@@ -354,20 +357,18 @@ class AuthAndUserRepository(
             path = profileRef.path
             val existing = profileRef.get().await()
             if (existing.exists()) {
-                val updateMap = mutableMapOf<String, Any?>(
+                val updateMap = InputValidator.nonNullFields(
                     "displayName" to cleanName,
                     "about" to cleanAbout,
                     "online" to true,
                     "discoverable" to discoverable,
+                    "photoUrl" to photoUrl?.takeIf { it.isNotBlank() },
                     "lastSeen" to FieldValue.serverTimestamp(),
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
-                if (!photoUrl.isNullOrBlank()) {
-                    updateMap["photoUrl"] = photoUrl
-                }
-                profileRef.update(updateMap.filterValues { it != null } as Map<String, Any>).await()
+                profileRef.update(updateMap).await()
             } else {
-                val createMap = mutableMapOf<String, Any?>(
+                val createMap = InputValidator.nonNullFields(
                     "uid" to uid,
                     "displayName" to cleanName,
                     "photoUrl" to (photoUrl?.takeIf { it.isNotBlank() } ?: user.photoUrl?.toString()),
@@ -377,7 +378,7 @@ class AuthAndUserRepository(
                     "lastSeen" to FieldValue.serverTimestamp(),
                     "createdAt" to FieldValue.serverTimestamp(),
                     "updatedAt" to FieldValue.serverTimestamp()
-                ).filterValues { it != null } as Map<String, Any>
+                )
                 profileRef.set(createMap).await()
             }
 
@@ -386,15 +387,15 @@ class AuthAndUserRepository(
             path = settingsRef.path
             val existingSettings = settingsRef.get().await()
             if (existingSettings.exists()) {
-                val settingsUpdate = mutableMapOf<String, Any?>(
+                val settingsUpdate = InputValidator.nonNullFields(
                     "phoneNumber" to phoneNumber?.takeIf { it.isNotBlank() },
                     "countryCode" to countryCode,
                     "email" to user.email,
                     "updatedAt" to FieldValue.serverTimestamp()
-                ).filterValues { it != null } as Map<String, Any>
+                )
                 settingsRef.update(settingsUpdate).await()
             } else {
-                val settingsCreate = mutableMapOf<String, Any?>(
+                val settingsCreate = InputValidator.nonNullFields(
                     "uid" to uid,
                     "phoneNumber" to (phoneNumber?.takeIf { it.isNotBlank() } ?: user.phoneNumber),
                     "countryCode" to countryCode,
@@ -410,8 +411,44 @@ class AuthAndUserRepository(
                     "blockedUserIds" to emptyList<String>(),
                     "createdAt" to FieldValue.serverTimestamp(),
                     "updatedAt" to FieldValue.serverTimestamp()
-                ).filterValues { it != null } as Map<String, Any>
+                )
                 settingsRef.set(settingsCreate).await()
+            }
+
+            // Publish exact-match phone lookup entry if a phone number is set
+            val effectivePhone = phoneNumber?.takeIf { it.isNotBlank() } ?: user.phoneNumber
+            val effectivePhoto = photoUrl?.takeIf { it.isNotBlank() }
+                ?: existing.getString("photoUrl")
+                ?: user.photoUrl?.toString()
+            val lookupKey = effectivePhone?.let { InputValidator.phoneLookupKey(countryCode, it) }
+            if (lookupKey != null) {
+                try {
+                    val lookupRef = db.collection("phoneLookup").document(lookupKey)
+                    val lookupSnap = lookupRef.get().await()
+                    if (!lookupSnap.exists()) {
+                        lookupRef.set(
+                            InputValidator.nonNullFields(
+                                "uid" to uid,
+                                "displayName" to cleanName,
+                                "photoUrl" to effectivePhoto,
+                                "createdAt" to FieldValue.serverTimestamp(),
+                                "updatedAt" to FieldValue.serverTimestamp()
+                            )
+                        ).await()
+                    } else if (lookupSnap.getString("uid") == uid) {
+                        lookupRef.update(
+                            InputValidator.nonNullFields(
+                                "displayName" to cleanName,
+                                "photoUrl" to effectivePhoto,
+                                "updatedAt" to FieldValue.serverTimestamp()
+                            )
+                        ).await()
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w("Auth", "Phone lookup index update skipped: ${e.message}")
+                }
             }
             Result.success(Unit)
         } catch (e: CancellationException) {
@@ -549,6 +586,155 @@ class AuthAndUserRepository(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    fun observeSavedContacts(): Flow<List<SavedContact>> = flow {
+        val uid = requireUserId()
+        val path = "users/$uid/contacts"
+        emitAll(
+            db.collection("users").document(uid).collection("contacts")
+                .snapshots()
+                .map { snap ->
+                    snap.toObjects(SavedContact::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+                        .sortedBy { it.displayName.lowercase() }
+                }
+                .catch { error ->
+                    val firestoreError = generateSequence(error) { it.cause }
+                        .filterIsInstance<FirebaseFirestoreException>()
+                        .firstOrNull()
+                    if (firestoreError == null && error is CancellationException) throw error
+                    val toLog = firestoreError ?: (error as? Exception)
+                    if (toLog != null && auth.currentUser?.uid == uid) {
+                        handleFirestoreError(toLog, OperationType.LIST, path)
+                    }
+                    throw error
+                }
+        )
+    }
+
+    suspend fun findUserByPhone(dialCode: String, localOrFullNumber: String): Result<UserProfile?> {
+        return try {
+            val uid = requireUserId()
+            val primaryKey = InputValidator.phoneLookupKey(dialCode, localOrFullNumber)
+                ?: return Result.failure(IllegalArgumentException("Enter a valid phone number."))
+            val rawDigits = localOrFullNumber.filter { it.isDigit() }
+            val keysToTry = listOfNotNull(
+                primaryKey,
+                rawDigits.takeIf { it.length in 6..15 && it != primaryKey }
+            )
+            var foundEntry: PhoneLookupEntry? = null
+            for (key in keysToTry) {
+                val snap = db.collection("phoneLookup").document(key).get().await()
+                if (snap.exists()) {
+                    foundEntry = snap.toObject(PhoneLookupEntry::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+                    if (foundEntry != null) break
+                }
+            }
+            val entry = foundEntry ?: return Result.success(null)
+            if (entry.uid == uid) {
+                return Result.failure(IllegalArgumentException("That phone number belongs to your own account."))
+            }
+            val profile = getUserProfileOnce(entry.uid) ?: UserProfile(
+                id = entry.uid,
+                uid = entry.uid,
+                displayName = entry.displayName,
+                photoUrl = entry.photoUrl
+            )
+            Result.success(profile)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.GET, "phoneLookup")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun resolveScannedContact(rawQr: String): Result<UserProfile?> {
+        return try {
+            val uid = requireUserId()
+            val target = InputValidator.parseContactQrPayload(rawQr)
+                ?: return Result.failure(IllegalArgumentException("QR code is not a valid Manoj & Sonali contact."))
+            when (target) {
+                is InputValidator.ScannedContactTarget.ByUid -> {
+                    if (target.uid == uid) {
+                        return Result.failure(IllegalArgumentException("This is your own QR code."))
+                    }
+                    val profile = getUserProfileOnce(target.uid)
+                    Result.success(profile)
+                }
+                is InputValidator.ScannedContactTarget.ByPhone -> {
+                    findUserByPhone("", target.rawPhone)
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun saveContact(
+        contact: UserProfile,
+        phoneNumber: String?,
+        via: ContactAddedVia
+    ): Result<Unit> {
+        var path = "users"
+        return try {
+            val uid = requireUserId()
+            if (contact.uid.isBlank() || contact.uid == uid) {
+                return Result.failure(IllegalArgumentException("Cannot add yourself as a contact."))
+            }
+            val ref = db.collection("users").document(uid)
+                .collection("contacts").document(contact.uid)
+            path = ref.path
+            val existing = ref.get().await()
+            if (existing.exists()) {
+                ref.update(
+                    InputValidator.nonNullFields(
+                        "displayName" to contact.displayName.take(InputValidator.MAX_DISPLAY_NAME),
+                        "photoUrl" to contact.photoUrl,
+                        "about" to contact.about.take(InputValidator.MAX_ABOUT),
+                        "phoneNumber" to phoneNumber?.takeIf { it.isNotBlank() }?.take(32),
+                        "addedVia" to via.name,
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                ).await()
+            } else {
+                ref.set(
+                    InputValidator.nonNullFields(
+                        "contactUid" to contact.uid,
+                        "displayName" to contact.displayName.take(InputValidator.MAX_DISPLAY_NAME),
+                        "photoUrl" to contact.photoUrl,
+                        "about" to contact.about.take(InputValidator.MAX_ABOUT),
+                        "phoneNumber" to phoneNumber?.takeIf { it.isNotBlank() }?.take(32),
+                        "addedVia" to via.name,
+                        "createdAt" to FieldValue.serverTimestamp(),
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                ).await()
+            }
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.WRITE, path)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun removeContact(contactUid: String): Result<Unit> {
+        val uid = auth.currentUser?.uid
+            ?: return Result.failure(IllegalStateException("Not signed in."))
+        val path = "users/$uid/contacts/$contactUid"
+        return try {
+            db.document(path).delete().await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.DELETE, path)
             Result.failure(e)
         }
     }

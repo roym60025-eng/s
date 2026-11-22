@@ -40,7 +40,9 @@ import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.Groups
@@ -48,6 +50,7 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -81,9 +84,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
+import com.example.contacts.AddContactTab
 import com.example.domain.model.ChatRoom
 import com.example.domain.model.DeliveryStatus
 import com.example.domain.model.GroupChat
+import com.example.domain.model.SavedContact
 import com.example.domain.model.UiState
 import com.example.domain.model.UserProfile
 import com.example.domain.model.UserStatus
@@ -107,6 +112,7 @@ fun HomeScreen(
     onCreateGroup: () -> Unit,
     onCreateStatus: () -> Unit,
     onViewUserStatuses: (String) -> Unit,
+    onOpenAddContact: (AddContactTab) -> Unit,
     onStartVoiceCall: (UserProfile) -> Unit,
     onStartVideoCall: (UserProfile) -> Unit,
     callsTabContent: @Composable (UiState<List<com.example.domain.model.CallSession>>, Map<String, UserProfile>) -> Unit,
@@ -118,6 +124,7 @@ fun HomeScreen(
     val currentProfile by viewModel.currentUserProfile.collectAsStateWithLifecycle()
     val privateSettings by viewModel.privateSettings.collectAsStateWithLifecycle()
     val usersMap by viewModel.usersMap.collectAsStateWithLifecycle()
+    val savedContacts by viewModel.savedContacts.collectAsStateWithLifecycle()
     val chatsState by viewModel.chatsState.collectAsStateWithLifecycle()
     val groupsState by viewModel.groupsState.collectAsStateWithLifecycle()
     val statuses by viewModel.statuses.collectAsStateWithLifecycle()
@@ -172,6 +179,12 @@ fun HomeScreen(
                                 }
                             },
                             actions = {
+                                IconButton(
+                                    onClick = { onOpenAddContact(AddContactTab.QR_SCAN) },
+                                    modifier = Modifier.testTag("home_qr_scan_button")
+                                ) {
+                                    Icon(Icons.Default.QrCodeScanner, contentDescription = "Scan QR to add contact")
+                                }
                                 IconButton(
                                     onClick = { viewModel.toggleSearch(!isSearchActive) },
                                     modifier = Modifier.testTag("home_search_button")
@@ -302,11 +315,21 @@ fun HomeScreen(
         NewChatUserDiscoverySheet(
             currentUserId = viewModel.currentUserId,
             blockedIds = privateSettings?.blockedUserIds.orEmpty(),
+            savedContacts = savedContacts,
             users = usersMap.values.filter { it.uid != viewModel.currentUserId },
+            usersMap = usersMap,
             onDismiss = { showNewChatSheet = false },
-            onSelectUser = { user ->
+            onAddByNumber = {
                 showNewChatSheet = false
-                viewModel.startDirectChat(user.uid, onOpenChat)
+                onOpenAddContact(AddContactTab.PHONE)
+            },
+            onScanQr = {
+                showNewChatSheet = false
+                onOpenAddContact(AddContactTab.QR_SCAN)
+            },
+            onSelectUid = { targetUid ->
+                showNewChatSheet = false
+                viewModel.startDirectChat(targetUid, onOpenChat)
             },
             onVoiceCall = { user ->
                 showNewChatSheet = false
@@ -698,17 +721,33 @@ private fun GroupsTabContent(
 private fun NewChatUserDiscoverySheet(
     currentUserId: String,
     blockedIds: List<String>,
+    savedContacts: List<SavedContact>,
     users: List<UserProfile>,
+    usersMap: Map<String, UserProfile>,
     onDismiss: () -> Unit,
-    onSelectUser: (UserProfile) -> Unit,
+    onAddByNumber: () -> Unit,
+    onScanQr: () -> Unit,
+    onSelectUid: (String) -> Unit,
     onVoiceCall: (UserProfile) -> Unit,
     onVideoCall: (UserProfile) -> Unit
 ) {
     var filter by remember { mutableStateOf("") }
-    val filtered = remember(users, blockedIds, filter) {
+    val filteredSaved = remember(savedContacts, blockedIds, filter) {
+        savedContacts.filter { c ->
+            c.contactUid != currentUserId &&
+                c.contactUid !in blockedIds &&
+                (filter.isBlank() ||
+                    c.displayName.contains(filter, ignoreCase = true) ||
+                    (c.phoneNumber?.contains(filter, ignoreCase = true) == true) ||
+                    c.about.contains(filter, ignoreCase = true))
+        }
+    }
+    val savedIds = remember(savedContacts) { savedContacts.map { it.contactUid }.toSet() }
+    val filteredUsers = remember(users, blockedIds, savedIds, filter) {
         users.filter { u ->
             u.uid != currentUserId &&
                 u.uid !in blockedIds &&
+                u.uid !in savedIds &&
                 (filter.isBlank() || u.displayName.contains(filter, ignoreCase = true) || u.about.contains(filter, ignoreCase = true))
         }
     }
@@ -722,55 +761,142 @@ private fun NewChatUserDiscoverySheet(
             Text("Start a Conversation", style = MaterialTheme.typography.titleLarge)
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Discover people registered on Manoj & Sonali",
+                text = "Add a contact by number, scan a QR code, or pick someone below",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                FilledTonalButton(
+                    onClick = onAddByNumber,
+                    modifier = Modifier.weight(1f).testTag("sheet_add_by_phone_button"),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Add by Number")
+                }
+                FilledTonalButton(
+                    onClick = onScanQr,
+                    modifier = Modifier.weight(1f).testTag("sheet_scan_qr_button"),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Scan QR")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
             OutlinedTextField(
                 value = filter,
                 onValueChange = { filter = it },
-                placeholder = { Text("Search by name...") },
+                placeholder = { Text("Search name or phone number...") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 singleLine = true,
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(12.dp))
-            if (filtered.isEmpty()) {
+            if (filteredSaved.isEmpty() && filteredUsers.isEmpty()) {
                 EmptyIllustrationState(
                     title = "No contacts found",
-                    subtitle = "Ask another user to sign in on a second device to start real-time messaging."
+                    subtitle = "Tap Add by Number or Scan QR above to add a friend."
                 )
             } else {
                 LazyColumn(modifier = Modifier.height(340.dp)) {
-                    items(filtered, key = { it.uid }) { user ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onSelectUser(user) }
-                                .padding(vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            UserAvatar(
-                                name = user.displayName,
-                                photoUrl = user.photoUrl,
-                                size = 48.dp,
-                                isOnline = user.online
+                    if (filteredSaved.isNotEmpty()) {
+                        item(key = "header_saved") {
+                            Text(
+                                text = "My Contacts",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(vertical = 6.dp)
                             )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(user.displayName, style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    user.about,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                        }
+                        items(filteredSaved, key = { "saved_${it.contactUid}" }) { contact ->
+                            val liveUser = usersMap[contact.contactUid]
+                            val callTarget = liveUser ?: UserProfile(
+                                uid = contact.contactUid,
+                                displayName = contact.displayName,
+                                photoUrl = contact.photoUrl,
+                                about = contact.about
+                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onSelectUid(contact.contactUid) }
+                                    .padding(vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                UserAvatar(
+                                    name = liveUser?.displayName ?: contact.displayName,
+                                    photoUrl = liveUser?.photoUrl ?: contact.photoUrl,
+                                    size = 48.dp,
+                                    isOnline = liveUser?.online == true
                                 )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = liveUser?.displayName ?: contact.displayName,
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    Text(
+                                        text = contact.phoneNumber ?: (liveUser?.about ?: contact.about),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                IconButton(onClick = { onVoiceCall(callTarget) }) {
+                                    Icon(Icons.Outlined.Call, contentDescription = "Voice call")
+                                }
                             }
-                            IconButton(onClick = { onVoiceCall(user) }) {
-                                Icon(Icons.Outlined.Call, contentDescription = "Voice call")
+                        }
+                    }
+
+                    if (filteredUsers.isNotEmpty()) {
+                        item(key = "header_directory") {
+                            Text(
+                                text = "Discover People",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 8.dp, bottom = 6.dp)
+                            )
+                        }
+                        items(filteredUsers, key = { it.uid }) { user ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onSelectUid(user.uid) }
+                                    .padding(vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                UserAvatar(
+                                    name = user.displayName,
+                                    photoUrl = user.photoUrl,
+                                    size = 48.dp,
+                                    isOnline = user.online
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(user.displayName, style = MaterialTheme.typography.titleMedium)
+                                    Text(
+                                        user.about,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                IconButton(onClick = { onVoiceCall(user) }) {
+                                    Icon(Icons.Outlined.Call, contentDescription = "Voice call")
+                                }
                             }
                         }
                     }
