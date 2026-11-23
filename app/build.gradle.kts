@@ -16,8 +16,8 @@ android {
     applicationId = "com.aistudio.manojsonali.vxqrmt"
     minSdk = 26
     targetSdk = 36
-    versionCode = 3
-    versionName = "1.2"
+    versionCode = 4
+    versionName = "1.3"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -70,7 +70,7 @@ android {
   }
   packaging {
     jniLibs {
-      useLegacyPackaging = true
+      useLegacyPackaging = false
     }
   }
 }
