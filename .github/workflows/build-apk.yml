@@ -3,8 +3,7 @@ name: Build Android APK
 on:
   push:
     branches:
-      - main
-      - master
+      - "**"
     tags:
       - "v*"
   workflow_dispatch:
@@ -15,10 +14,10 @@ on:
         type: boolean
         default: true
       release_tag:
-        description: "GitHub Release tag name"
+        description: "Optional custom GitHub Release tag name"
         required: false
         type: string
-        default: "latest-apk"
+        default: ""
 
 permissions:
   contents: write
@@ -204,7 +203,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag || 'latest-apk' }}
-          name: "Manoj & Sonali APK (${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag || 'latest-apk' }})"
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag || format('apk-build-{0}', github.run_number) }}
+          name: "Manoj & Sonali APK (Build #${{ github.run_number }})"
           files: dist-apk/*.apk
+          make_latest: true
           generate_release_notes: true
