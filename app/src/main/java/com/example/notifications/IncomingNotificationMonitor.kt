@@ -42,7 +42,7 @@ class IncomingNotificationMonitor(
     private var observedUid: String? = null
 
     @Volatile
-    private var isAppInForeground: Boolean = true
+    private var isAppInForeground: Boolean = false
 
     @Volatile
     private var activeChatId: String? = null
@@ -111,6 +111,12 @@ class IncomingNotificationMonitor(
                     }
             }
 
+            var baselineMs = preferencesDataStore.getLastNotifiedMessageMs()
+            if (baselineMs == 0L) {
+                baselineMs = System.currentTimeMillis()
+                preferencesDataStore.updateLastNotifiedMessageMs(baselineMs)
+            }
+
             // 1. Direct Chats Listener
             launch {
                 var initialized = false
@@ -131,8 +137,35 @@ class IncomingNotificationMonitor(
 
                     if (!initialized) {
                         snap.chats.forEach { room ->
-                            seenChatMessageTime[room.id] = room.lastMessageTime?.toDate()?.time ?: 0L
-                            seenChatUnread[room.id] = room.unreadFor(uid)
+                            val msgTimeMs = room.lastMessageTime?.toDate()?.time ?: 0L
+                            val unreadCount = room.unreadFor(uid)
+                            seenChatMessageTime[room.id] = msgTimeMs
+                            seenChatUnread[room.id] = unreadCount
+
+                            val peerId = room.peerId(uid)
+                            val isViewingThisChat = isAppInForeground && activeChatId == room.id
+                            if (unreadCount > 0 &&
+                                room.lastMessage.isNotBlank() &&
+                                room.lastMessageSenderId != null &&
+                                room.lastMessageSenderId != uid &&
+                                msgTimeMs > baselineMs &&
+                                allowMessageNotifications &&
+                                !isViewingThisChat &&
+                                uid !in room.mutedBy &&
+                                peerId !in blocked
+                            ) {
+                                val senderName = snap.contactNames[peerId]
+                                    ?: snap.usersMap[peerId]?.displayName
+                                    ?: "New message"
+                                ManojSonaliMessagingService.showNotification(
+                                    context = appContext,
+                                    type = "message",
+                                    title = senderName,
+                                    body = room.lastMessage,
+                                    targetId = room.id
+                                )
+                                preferencesDataStore.updateLastNotifiedMessageMs(msgTimeMs)
+                            }
                         }
                         initialized = true
                         return@collectLatest
@@ -192,7 +225,27 @@ class IncomingNotificationMonitor(
 
                     if (!initialized) {
                         groups.forEach { group ->
-                            seenGroupTime[group.id] = group.lastMessageTime?.toDate()?.time ?: 0L
+                            val msgTimeMs = group.lastMessageTime?.toDate()?.time ?: 0L
+                            seenGroupTime[group.id] = msgTimeMs
+                            val isViewingThisGroup = isAppInForeground && activeGroupId == group.id
+                            if (group.lastMessage.isNotBlank() &&
+                                msgTimeMs > baselineMs &&
+                                group.lastMessageSenderName != null &&
+                                group.lastMessageSenderName != myDisplayName &&
+                                allowGroupNotifications &&
+                                !isViewingThisGroup &&
+                                uid !in group.mutedBy
+                            ) {
+                                val body = "${group.lastMessageSenderName}: ${group.lastMessage}"
+                                ManojSonaliMessagingService.showNotification(
+                                    context = appContext,
+                                    type = "group",
+                                    title = group.name,
+                                    body = body,
+                                    targetId = group.id
+                                )
+                                preferencesDataStore.updateLastNotifiedMessageMs(msgTimeMs)
+                            }
                         }
                         initialized = true
                         return@collectLatest
@@ -243,7 +296,25 @@ class IncomingNotificationMonitor(
                     val blocked = settings?.blockedUserIds.orEmpty().toSet()
 
                     if (!initialized) {
-                        calls.forEach { seenCallIds.add(it.id) }
+                        val recentCutoff = System.currentTimeMillis() - 90_000L
+                        calls.forEach { call ->
+                            seenCallIds.add(call.id)
+                            val startedMs = call.startedAt?.toDate()?.time ?: 0L
+                            val isRecentIncoming = call.receiverId == uid &&
+                                call.statusEnum == CallStatus.RINGING &&
+                                call.callerId !in blocked &&
+                                startedMs >= recentCutoff
+                            if (isRecentIncoming && allowCalls && !isAppInForeground) {
+                                val kind = if (call.typeEnum == CallType.VIDEO) "video" else "voice"
+                                ManojSonaliMessagingService.showNotification(
+                                    context = appContext,
+                                    type = "call",
+                                    title = call.callerName ?: "Incoming Call",
+                                    body = "Incoming $kind call",
+                                    targetId = call.id
+                                )
+                            }
+                        }
                         initialized = true
                         return@collectLatest
                     }

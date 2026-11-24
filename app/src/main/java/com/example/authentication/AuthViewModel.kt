@@ -61,10 +61,24 @@ class AuthViewModel(
 
     fun prefillFromCurrentUser() {
         val user = authRepository.currentUser() ?: return
+        val e164 = user.phoneNumber?.trim().orEmpty()
+        var matchedCountry = _uiState.value.selectedCountry
+        var localDigits = _uiState.value.phoneNumberInput
+        if (e164.startsWith("+") && localDigits.isBlank()) {
+            val match = CountryCodes.all
+                .sortedByDescending { it.dialCode.length }
+                .firstOrNull { e164.startsWith(it.dialCode) }
+            if (match != null) {
+                matchedCountry = match
+                localDigits = e164.removePrefix(match.dialCode).filter { it.isDigit() }
+            }
+        }
         _uiState.update { state ->
             state.copy(
                 displayName = state.displayName.ifBlank { user.displayName.orEmpty() },
-                uploadedAvatarUrl = state.uploadedAvatarUrl ?: user.photoUrl?.toString()
+                uploadedAvatarUrl = state.uploadedAvatarUrl ?: user.photoUrl?.toString(),
+                selectedCountry = matchedCountry,
+                phoneNumberInput = localDigits
             )
         }
     }
@@ -131,7 +145,11 @@ class AuthViewModel(
         }
     }
 
-    fun sendOtp(activity: Activity, isResend: Boolean = false) {
+    fun sendOtp(
+        activity: Activity,
+        isResend: Boolean = false,
+        onAutoVerifiedReady: () -> Unit = {}
+    ) {
         val state = _uiState.value
         val error = InputValidator.validatePhoneNumber(state.selectedCountry.dialCode, state.phoneNumberInput)
         if (error != null) {
@@ -180,11 +198,12 @@ class AuthViewModel(
                             onSuccess = { user ->
                                 preferencesDataStore.saveEncryptedPhone(e164)
                                 val existing = authRepository.getUserProfileOnce(user.uid)
-                                _uiState.update {
-                                    it.copy(
-                                        isLoading = false,
-                                        step = if (existing != null) it.step else AuthStep.CREATE_PROFILE
-                                    )
+                                _uiState.update { it.copy(isLoading = false) }
+                                if (existing != null && existing.displayName.isNotBlank()) {
+                                    authRepository.updatePresence(true)
+                                    onAutoVerifiedReady()
+                                } else {
+                                    _uiState.update { it.copy(step = AuthStep.CREATE_PROFILE) }
                                 }
                             },
                             onFailure = { err ->

@@ -15,6 +15,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,10 +37,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Reply
@@ -53,11 +55,13 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SentimentSatisfiedAlt
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.Videocam
@@ -70,7 +74,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -80,7 +83,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import com.example.ManojSonaliApp
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -88,31 +90,48 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.example.ManojSonaliApp
 import com.example.domain.model.ChatMessage
 import com.example.domain.model.MessageType
 import com.example.domain.model.UiState
 import com.example.domain.model.UserProfile
+import com.example.presentation.components.ChatDoodleWallpaper
 import com.example.presentation.components.DeliveryTickIcon
 import com.example.presentation.components.ErrorBannerCard
 import com.example.presentation.components.LoadingStateBox
 import com.example.presentation.components.UserAvatar
-import com.example.ui.theme.OutgoingBubbleEnd
-import com.example.ui.theme.OutgoingBubbleStart
+import com.example.ui.theme.BrandGreen
+import com.example.ui.theme.DeepIndigoInk
+import com.example.ui.theme.EmeraldButton
+import com.example.ui.theme.ForestGreenDarkHeader
+import com.example.ui.theme.ForestGreenHeader
+import com.example.ui.theme.IncomingBubbleDark
+import com.example.ui.theme.IncomingBubbleLight
+import com.example.ui.theme.MutedSlateDark
+import com.example.ui.theme.MutedSlateLight
+import com.example.ui.theme.OutgoingGreenDark
+import com.example.ui.theme.OutgoingGreenLight
 import com.example.utils.DateTimeUtils
 import com.example.utils.VoicePlaybackState
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -145,10 +164,13 @@ fun ChatDetailScreen(
     var showAttachSheet by remember { mutableStateOf(false) }
     var showEmojiBar by remember { mutableStateOf(false) }
     var showCamera by remember { mutableStateOf(false) }
+    var showTopMenu by remember { mutableStateOf(false) }
     var forwardTargetMessage by remember { mutableStateOf<ChatMessage?>(null) }
     var previewMediaMessage by remember { mutableStateOf<ChatMessage?>(null) }
 
     val listState = rememberLazyListState()
+    val isDark = isSystemInDarkTheme()
+    val headerColor = if (isDark) ForestGreenDarkHeader else ForestGreenHeader
 
     val imagePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
@@ -206,7 +228,10 @@ fun ChatDetailScreen(
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    containerColor = headerColor,
+                    navigationIconContentColor = Color.White,
+                    titleContentColor = Color.White,
+                    actionIconContentColor = Color.White
                 ),
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.testTag("chat_back_button")) {
@@ -218,30 +243,27 @@ fun ChatDetailScreen(
                         UserAvatar(
                             name = peerUser?.displayName ?: "Contact",
                             photoUrl = peerUser?.photoUrl,
-                            size = 40.dp,
+                            size = 38.dp,
                             isOnline = peerUser?.online == true
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
                                 text = peerUser?.displayName ?: "Conversation",
-                                style = MaterialTheme.typography.titleMedium,
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = Color.White,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = when {
                                     isPeerTyping -> "typing..."
-                                    peerUser?.online == true -> "Online"
-                                    peerUser?.lastSeen != null -> "Last seen ${DateTimeUtils.formatLastSeen(peerUser?.lastSeen)}"
+                                    peerUser?.online == true -> "online"
+                                    peerUser?.lastSeen != null -> "last seen ${DateTimeUtils.formatLastSeen(peerUser?.lastSeen)}"
                                     else -> "Manoj & Sonali"
                                 },
                                 style = MaterialTheme.typography.bodySmall,
-                                color = if (isPeerTyping || peerUser?.online == true) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                }
+                                color = Color.White.copy(alpha = 0.85f)
                             )
                         }
                     }
@@ -249,266 +271,406 @@ fun ChatDetailScreen(
                 actions = {
                     peerUser?.let { peer ->
                         IconButton(
+                            onClick = { onStartVideoCall(peer) },
+                            modifier = Modifier.testTag("chat_video_call_button")
+                        ) {
+                            Icon(Icons.Default.Videocam, contentDescription = "Video call")
+                        }
+                        IconButton(
                             onClick = { onStartVoiceCall(peer) },
                             modifier = Modifier.testTag("chat_voice_call_button")
                         ) {
                             Icon(Icons.Default.Call, contentDescription = "Voice call")
                         }
-                        IconButton(
-                            onClick = { onStartVideoCall(peer) },
-                            modifier = Modifier.testTag("chat_video_call_button")
+                    }
+                    Box {
+                        IconButton(onClick = { showTopMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Chat options")
+                        }
+                        DropdownMenu(
+                            expanded = showTopMenu,
+                            onDismissRequest = { showTopMenu = false }
                         ) {
-                            Icon(Icons.Default.Videocam, contentDescription = "Video call")
+                            DropdownMenuItem(
+                                text = { Text("Attach Media") },
+                                onClick = {
+                                    showTopMenu = false
+                                    showAttachSheet = true
+                                }
+                            )
+                            peerUser?.let { peer ->
+                                DropdownMenuItem(
+                                    text = { Text("Voice Call") },
+                                    onClick = {
+                                        showTopMenu = false
+                                        onStartVoiceCall(peer)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Video Call") },
+                                    onClick = {
+                                        showTopMenu = false
+                                        onStartVideoCall(peer)
+                                    }
+                                )
+                            }
                         }
                     }
                 }
             )
         }
     ) { innerPadding ->
-        Column(
+        ChatDoodleWallpaper(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
                 .consumeWindowInsets(innerPadding)
         ) {
-            if (uploadProgress != null) {
-                LinearProgressIndicator(
-                    progress = { uploadProgress ?: 0f },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
+            Column(modifier = Modifier.fillMaxSize()) {
+                if (uploadProgress != null) {
+                    LinearProgressIndicator(
+                        progress = { uploadProgress ?: 0f },
+                        color = BrandGreen,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
 
-            if (actionError != null) {
-                ErrorBannerCard(
-                    message = actionError!!,
-                    onRetry = viewModel::clearError,
-                    modifier = Modifier.padding(12.dp)
-                )
-            }
+                if (actionError != null) {
+                    ErrorBannerCard(
+                        message = actionError!!,
+                        onRetry = viewModel::clearError,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
 
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                when (val state = messagesState) {
-                    is UiState.Loading -> LoadingStateBox("Loading chat history...")
-                    is UiState.Error -> ErrorBannerCard(state.message, modifier = Modifier.padding(16.dp))
-                    is UiState.Success -> {
-                        val msgs = state.data
-                        LaunchedEffect(msgs.size) {
-                            if (msgs.isNotEmpty()) {
-                                listState.animateScrollToItem(msgs.lastIndex)
-                                viewModel.markMessagesAsRead(msgs)
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    when (val state = messagesState) {
+                        is UiState.Loading -> LoadingStateBox("Loading chat history...")
+                        is UiState.Error -> ErrorBannerCard(state.message, modifier = Modifier.padding(16.dp))
+                        is UiState.Success -> {
+                            val msgs = state.data
+                            LaunchedEffect(msgs.size) {
+                                if (msgs.isNotEmpty()) {
+                                    listState.animateScrollToItem(msgs.lastIndex)
+                                    viewModel.markMessagesAsRead(msgs)
+                                }
                             }
-                        }
 
-                        if (msgs.isEmpty()) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = "Say hello to start this conversation.",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        } else {
-                            LazyColumn(
-                                state = listState,
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                if (msgs.size >= 40) {
-                                    item {
-                                        TextButton(
-                                            onClick = viewModel::loadOlderMessages,
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Text("Load older messages")
-                                        }
+                            if (msgs.isEmpty()) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Surface(
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                                        tonalElevation = 1.dp
+                                    ) {
+                                        Text(
+                                            text = "Say hello to start this conversation.",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)
+                                        )
                                     }
                                 }
-
-                                items(msgs, key = { it.id }) { msg ->
-                                    val isMine = msg.senderId == viewModel.currentUserId
-                                    ChatMessageBubble(
-                                        message = msg,
-                                        isMine = isMine,
-                                        playbackState = playbackState,
-                                        onPlayVoice = { viewModel.toggleVoicePlayback(msg) },
-                                        onOpenMedia = { previewMediaMessage = msg },
-                                        onReply = { viewModel.startReply(msg) },
-                                        onForward = { forwardTargetMessage = msg },
-                                        onEdit = { viewModel.startEdit(msg) },
-                                        onDelete = { viewModel.deleteMessage(msg) },
-                                        onReact = { emoji -> viewModel.toggleReaction(msg, emoji) },
-                                        onCopy = {
-                                            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                            cm.setPrimaryClip(ClipData.newPlainText("Message", msg.text))
-                                            Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+                            } else {
+                                LazyColumn(
+                                    state = listState,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    if (msgs.size >= 40) {
+                                        item {
+                                            TextButton(
+                                                onClick = viewModel::loadOlderMessages,
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Text("Load older messages")
+                                            }
                                         }
-                                    )
+                                    }
+
+                                    itemsIndexed(msgs, key = { _, m -> m.id }) { index, msg ->
+                                        val dateLabel = formatDaySeparator(msg.timestamp?.toDate())
+                                        val prevLabel = if (index > 0) formatDaySeparator(msgs[index - 1].timestamp?.toDate()) else null
+                                        if (dateLabel != null && dateLabel != prevLabel) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 6.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Surface(
+                                                    shape = RoundedCornerShape(10.dp),
+                                                    color = if (isDark) Color(0xFF1F2C34) else Color.White.copy(alpha = 0.92f),
+                                                    shadowElevation = 0.5.dp
+                                                ) {
+                                                    Text(
+                                                        text = dateLabel,
+                                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        val isMine = msg.senderId == viewModel.currentUserId
+                                        ChatMessageBubble(
+                                            message = msg,
+                                            isMine = isMine,
+                                            playbackState = playbackState,
+                                            onPlayVoice = { viewModel.toggleVoicePlayback(msg) },
+                                            onOpenMedia = { previewMediaMessage = msg },
+                                            onReply = { viewModel.startReply(msg) },
+                                            onForward = { forwardTargetMessage = msg },
+                                            onEdit = { viewModel.startEdit(msg) },
+                                            onDelete = { viewModel.deleteMessage(msg) },
+                                            onReact = { emoji -> viewModel.toggleReaction(msg, emoji) },
+                                            onCopy = {
+                                                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                                cm.setPrimaryClip(ClipData.newPlainText("Message", msg.text))
+                                                Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
 
-            // Reply or Edit bar
-            AnimatedVisibility(visible = replyingTo != null || editingMessage != null) {
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceContainer,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                // Reply or Edit bar
+                AnimatedVisibility(visible = replyingTo != null || editingMessage != null) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 2.dp,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = if (editingMessage != null) "Editing message" else "Replying to ${replyingTo?.senderName ?: "message"}",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(4.dp)
+                                    .height(34.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(BrandGreen)
                             )
-                            Text(
-                                text = editingMessage?.text ?: replyingTo?.text.orEmpty().ifBlank { "Media attachment" },
-                                style = MaterialTheme.typography.bodySmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        IconButton(onClick = viewModel::cancelReplyOrEdit) {
-                            Icon(Icons.Default.Close, contentDescription = "Cancel")
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (editingMessage != null) "Editing message" else "Replying to ${replyingTo?.senderName ?: "message"}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = BrandGreen
+                                )
+                                Text(
+                                    text = editingMessage?.text ?: replyingTo?.text.orEmpty().ifBlank { "Media attachment" },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            IconButton(onClick = viewModel::cancelReplyOrEdit) {
+                                Icon(Icons.Default.Close, contentDescription = "Cancel")
+                            }
                         }
                     }
                 }
-            }
 
-            // Quick Emoji Strip
-            AnimatedVisibility(visible = showEmojiBar) {
-                Row(
+                // Quick Emoji Strip
+                AnimatedVisibility(visible = showEmojiBar) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surface)
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        listOf("😀", "❤️", "🙏", "👍", "🔥", "🎉", "🥳", "✨").forEach { emoji ->
+                            Text(
+                                text = emoji,
+                                style = MaterialTheme.typography.titleLarge,
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .clickable { viewModel.onComposerChanged(composerText + emoji) }
+                                    .padding(6.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Showcase #5 floating pill composer + emerald Mic/Send circular button
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
+                        .padding(horizontal = 8.dp, vertical = 8.dp)
                 ) {
-                    listOf("😀", "❤️", "🙏", "👍", "🔥", "🎉", "🥳", "✨").forEach { emoji ->
-                        Text(
-                            text = emoji,
-                            style = MaterialTheme.typography.titleLarge,
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .clickable { viewModel.onComposerChanged(composerText + emoji) }
-                                .padding(6.dp)
-                        )
-                    }
-                }
-            }
+                    if (recordingState.isRecording) {
+                        Surface(
+                            shape = RoundedCornerShape(28.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            shadowElevation = 2.dp,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                IconButton(onClick = viewModel::cancelVoiceRecording) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Discard voice", tint = MaterialTheme.colorScheme.error)
+                                }
+                                LinearProgressIndicator(
+                                    progress = { recordingState.amplitudeNormalized },
+                                    color = BrandGreen,
+                                    modifier = Modifier.weight(1f).height(8.dp).clip(RoundedCornerShape(4.dp))
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = DateTimeUtils.formatDurationMs(recordingState.elapsedMs),
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                IconButton(
+                                    onClick = viewModel::stopAndSendVoiceRecording,
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(CircleShape)
+                                        .background(EmeraldButton)
+                                ) {
+                                    Icon(Icons.Default.Stop, contentDescription = "Send voice", tint = Color.White)
+                                }
+                            }
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.Bottom
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(26.dp),
+                                color = if (isDark) ForestGreenDarkHeader else Color.White,
+                                shadowElevation = 1.5.dp,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    IconButton(
+                                        onClick = { showEmojiBar = !showEmojiBar },
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.SentimentSatisfiedAlt,
+                                            contentDescription = "Emojis",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
 
-            // Composer / Voice Recorder Bar
-            Surface(
-                tonalElevation = 3.dp,
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Box(
-                    modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
-                ) {
-                if (recordingState.isRecording) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = viewModel::cancelVoiceRecording) {
-                            Icon(Icons.Default.Delete, contentDescription = "Discard voice", tint = MaterialTheme.colorScheme.error)
-                        }
-                        LinearProgressIndicator(
-                            progress = { recordingState.amplitudeNormalized },
-                            modifier = Modifier.weight(1f).height(8.dp).clip(RoundedCornerShape(4.dp))
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = DateTimeUtils.formatDurationMs(recordingState.elapsedMs),
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        IconButton(
-                            onClick = viewModel::stopAndSendVoiceRecording,
-                            modifier = Modifier
-                                .size(46.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary)
-                        ) {
-                            Icon(Icons.Default.Stop, contentDescription = "Send voice", tint = Color.White)
-                        }
-                    }
-                } else {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = { showEmojiBar = !showEmojiBar }) {
-                            Icon(Icons.Default.EmojiEmotions, contentDescription = "Emojis")
-                        }
-                        OutlinedTextField(
-                            value = composerText,
-                            onValueChange = viewModel::onComposerChanged,
-                            placeholder = { Text("Message...") },
-                            maxLines = 4,
-                            shape = RoundedCornerShape(24.dp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("chat_message_input")
-                        )
-                        IconButton(
-                            onClick = { showAttachSheet = true },
-                            modifier = Modifier.testTag("chat_attach_button")
-                        ) {
-                            Icon(Icons.Default.AttachFile, contentDescription = "Attach media")
-                        }
-                        if (composerText.isNotBlank()) {
-                            IconButton(
-                                onClick = viewModel::sendTextMessage,
-                                modifier = Modifier
-                                    .size(46.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        Brush.linearGradient(listOf(OutgoingBubbleStart, OutgoingBubbleEnd))
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(vertical = 10.dp),
+                                        contentAlignment = Alignment.CenterStart
+                                    ) {
+                                        if (composerText.isEmpty()) {
+                                            Text(
+                                                text = "Type a message...",
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                            )
+                                        }
+                                        BasicTextField(
+                                            value = composerText,
+                                            onValueChange = viewModel::onComposerChanged,
+                                            maxLines = 4,
+                                            textStyle = MaterialTheme.typography.bodyLarge.copy(
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            ),
+                                            cursorBrush = SolidColor(BrandGreen),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .testTag("chat_message_input")
+                                        )
+                                    }
+
+                                    IconButton(
+                                        onClick = { showAttachSheet = true },
+                                        modifier = Modifier.size(40.dp).testTag("chat_attach_button")
+                                    ) {
+                                        Icon(
+                                            Icons.Default.AttachFile,
+                                            contentDescription = "Attach media",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+
+                                    IconButton(
+                                        onClick = {
+                                            val granted = ContextCompat.checkSelfPermission(
+                                                context, Manifest.permission.CAMERA
+                                            ) == PackageManager.PERMISSION_GRANTED
+                                            if (granted) showCamera = true
+                                            else cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                                        },
+                                        modifier = Modifier.size(40.dp).testTag("chat_camera_button")
+                                    ) {
+                                        Icon(
+                                            Icons.Default.PhotoCamera,
+                                            contentDescription = "Take photo",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(6.dp))
+
+                            if (composerText.isNotBlank()) {
+                                IconButton(
+                                    onClick = viewModel::sendTextMessage,
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(CircleShape)
+                                        .background(EmeraldButton)
+                                        .testTag("chat_send_button")
+                                ) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.Send,
+                                        contentDescription = "Send",
+                                        tint = Color.White
                                     )
-                                    .testTag("chat_send_button")
-                            ) {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.Send,
-                                    contentDescription = "Send",
-                                    tint = Color.White
-                                )
-                            }
-                        } else {
-                            IconButton(
-                                onClick = {
-                                    val granted = ContextCompat.checkSelfPermission(
-                                        context, Manifest.permission.RECORD_AUDIO
-                                    ) == PackageManager.PERMISSION_GRANTED
-                                    if (granted) viewModel.startVoiceRecording()
-                                    else micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                                },
-                                modifier = Modifier
-                                    .size(46.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primaryContainer)
-                                    .testTag("chat_voice_record_button")
-                            ) {
-                                Icon(
-                                    Icons.Default.Mic,
-                                    contentDescription = "Record voice message",
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
+                                }
+                            } else {
+                                IconButton(
+                                    onClick = {
+                                        val granted = ContextCompat.checkSelfPermission(
+                                            context, Manifest.permission.RECORD_AUDIO
+                                        ) == PackageManager.PERMISSION_GRANTED
+                                        if (granted) viewModel.startVoiceRecording()
+                                        else micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                    },
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(CircleShape)
+                                        .background(EmeraldButton)
+                                        .testTag("chat_voice_record_button")
+                                ) {
+                                    Icon(
+                                        Icons.Default.Mic,
+                                        contentDescription = "Record voice message",
+                                        tint = Color.White
+                                    )
+                                }
                             }
                         }
                     }
-                }
                 }
             }
         }
@@ -565,7 +727,7 @@ fun ChatDetailScreen(
             title = { Text("Forward message to") },
             text = {
                 LazyColumn(modifier = Modifier.height(260.dp)) {
-                    items(allUsers.filter { it.uid != viewModel.currentUserId }, key = { it.uid }) { user ->
+                    itemsIndexed(allUsers.filter { it.uid != viewModel.currentUserId }, key = { _, u -> u.uid }) { _, user ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -646,6 +808,20 @@ fun ChatDetailScreen(
     }
 }
 
+private fun formatDaySeparator(date: Date?): String? {
+    date ?: return null
+    val cal = Calendar.getInstance().apply { time = date }
+    val today = Calendar.getInstance()
+    val yesterday = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
+    return when {
+        cal.get(Calendar.YEAR) == today.get(Calendar.YEAR) &&
+            cal.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR) -> "Today"
+        cal.get(Calendar.YEAR) == yesterday.get(Calendar.YEAR) &&
+            cal.get(Calendar.DAY_OF_YEAR) == yesterday.get(Calendar.DAY_OF_YEAR) -> "Yesterday"
+        else -> SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(date)
+    }
+}
+
 @Composable
 private fun AttachOptionItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -688,13 +864,24 @@ private fun ChatMessageBubble(
     onReact: (String) -> Unit,
     onCopy: () -> Unit
 ) {
+    val isDark = isSystemInDarkTheme()
     var showMenu by remember { mutableStateOf(false) }
+
     val shape = if (isMine) {
-        RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp, bottomStart = 22.dp, bottomEnd = 6.dp)
+        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
     } else {
-        RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp, bottomStart = 6.dp, bottomEnd = 22.dp)
+        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 16.dp)
     }
-    val textColor = if (isMine) Color.White else MaterialTheme.colorScheme.onSurface
+
+    val bubbleColor = when {
+        isMine && isDark -> OutgoingGreenDark
+        isMine -> OutgoingGreenLight
+        isDark -> IncomingBubbleDark
+        else -> IncomingBubbleLight
+    }
+
+    val textColor = if (isDark) Color(0xFFE9EDEF) else DeepIndigoInk
+    val metaColor = if (isDark) MutedSlateDark else MutedSlateLight
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -703,20 +890,11 @@ private fun ChatMessageBubble(
         Box {
             Surface(
                 shape = shape,
-                tonalElevation = if (isMine) 0.dp else 2.dp,
-                color = if (isMine) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerHigh,
+                shadowElevation = 0.8.dp,
+                color = bubbleColor,
                 modifier = Modifier
                     .widthIn(max = 310.dp)
                     .clip(shape)
-                    .then(
-                        if (isMine) {
-                            Modifier.background(
-                                Brush.linearGradient(listOf(OutgoingBubbleStart, OutgoingBubbleEnd))
-                            )
-                        } else {
-                            Modifier
-                        }
-                    )
                     .combinedClickable(
                         onClick = {
                             if (message.messageType == MessageType.IMAGE || message.messageType == MessageType.VIDEO) {
@@ -728,12 +906,12 @@ private fun ChatMessageBubble(
                         onLongClick = { if (!message.isDeleted) showMenu = true }
                     )
             ) {
-                Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                     if (message.forwarded) {
                         Text(
                             text = "Forwarded",
                             style = MaterialTheme.typography.labelSmall.copy(fontStyle = FontStyle.Italic),
-                            color = textColor.copy(alpha = 0.78f)
+                            color = metaColor
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                     }
@@ -741,14 +919,14 @@ private fun ChatMessageBubble(
                     if (!message.replyToText.isNullOrBlank()) {
                         Surface(
                             shape = RoundedCornerShape(10.dp),
-                            color = Color.Black.copy(alpha = if (isMine) 0.18f else 0.08f),
+                            color = Color.Black.copy(alpha = if (isDark) 0.25f else 0.06f),
                             modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)
                         ) {
                             Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
                                 Text(
                                     text = message.replyToSender ?: "Reply",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = textColor
+                                    color = BrandGreen
                                 )
                                 Text(
                                     text = message.replyToText,
@@ -765,20 +943,22 @@ private fun ChatMessageBubble(
                         Text(
                             text = "This message was deleted",
                             style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
-                            color = textColor.copy(alpha = 0.75f)
+                            color = metaColor
                         )
                     } else {
                         when (message.messageType) {
                             MessageType.IMAGE -> {
-                                AsyncImage(
-                                    model = message.mediaUrl,
-                                    contentDescription = "Shared image",
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(190.dp)
-                                        .clip(RoundedCornerShape(14.dp))
-                                )
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    AsyncImage(
+                                        model = message.mediaUrl,
+                                        contentDescription = "Shared image",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(195.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                    )
+                                }
                                 if (message.text.isNotBlank()) {
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Text(message.text, style = MaterialTheme.typography.bodyLarge, color = textColor)
@@ -786,9 +966,9 @@ private fun ChatMessageBubble(
                             }
                             MessageType.VIDEO -> {
                                 Surface(
-                                    shape = RoundedCornerShape(14.dp),
+                                    shape = RoundedCornerShape(12.dp),
                                     color = Color.Black.copy(alpha = 0.28f),
-                                    modifier = Modifier.fillMaxWidth().height(120.dp)
+                                    modifier = Modifier.fillMaxWidth().height(124.dp)
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
                                         Icon(Icons.Default.PlayArrow, contentDescription = "Play video", tint = Color.White, modifier = Modifier.size(44.dp))
@@ -806,7 +986,7 @@ private fun ChatMessageBubble(
                                         Icon(
                                             imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                             contentDescription = if (isPlaying) "Pause" else "Play",
-                                            tint = textColor
+                                            tint = BrandGreen
                                         )
                                     }
                                     LinearProgressIndicator(
@@ -815,8 +995,8 @@ private fun ChatMessageBubble(
                                                 (playbackState.positionMs.toFloat() / playbackState.durationMs.toFloat()).coerceIn(0f, 1f)
                                             } else 0f
                                         },
-                                        color = textColor,
-                                        trackColor = textColor.copy(alpha = 0.25f),
+                                        color = BrandGreen,
+                                        trackColor = textColor.copy(alpha = 0.18f),
                                         modifier = Modifier.weight(1f)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
@@ -825,7 +1005,7 @@ private fun ChatMessageBubble(
                                             if (isActive && isPlaying) playbackState.positionMs else durationMs
                                         ),
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = textColor
+                                        color = metaColor
                                     )
                                 }
                             }
@@ -834,7 +1014,7 @@ private fun ChatMessageBubble(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.clickable(onClick = onOpenMedia)
                                 ) {
-                                    Icon(Icons.Default.Description, contentDescription = null, tint = textColor)
+                                    Icon(Icons.Default.Description, contentDescription = null, tint = BrandGreen)
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
@@ -847,7 +1027,7 @@ private fun ChatMessageBubble(
                                         Text(
                                             text = DateTimeUtils.formatBytes(message.mediaSizeBytes ?: 0L),
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = textColor.copy(alpha = 0.78f)
+                                            color = metaColor
                                         )
                                     }
                                 }
@@ -855,14 +1035,14 @@ private fun ChatMessageBubble(
                             MessageType.TEXT -> {
                                 Text(
                                     text = message.text,
-                                    style = MaterialTheme.typography.bodyLarge,
+                                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp),
                                     color = textColor
                                 )
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(3.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.End,
@@ -872,19 +1052,19 @@ private fun ChatMessageBubble(
                             Text(
                                 text = "edited · ",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = textColor.copy(alpha = 0.75f)
+                                color = metaColor
                             )
                         }
                         Text(
                             text = DateTimeUtils.formatMessageTime(message.timestamp),
                             style = MaterialTheme.typography.labelSmall,
-                            color = textColor.copy(alpha = 0.78f)
+                            color = metaColor
                         )
                         if (isMine) {
                             Spacer(modifier = Modifier.width(4.dp))
                             DeliveryTickIcon(
                                 status = message.status,
-                                tintDefault = Color.White.copy(alpha = 0.85f)
+                                tintDefault = metaColor
                             )
                         }
                     }
@@ -939,7 +1119,8 @@ private fun ChatMessageBubble(
         if (message.reactions.isNotEmpty()) {
             Surface(
                 shape = RoundedCornerShape(50),
-                tonalElevation = 3.dp,
+                tonalElevation = 2.dp,
+                color = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.padding(top = 2.dp)
             ) {
                 Text(

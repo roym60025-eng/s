@@ -85,11 +85,25 @@ import coil.compose.AsyncImage
 import com.example.domain.model.GroupMessage
 import com.example.domain.model.MessageType
 import com.example.domain.model.UiState
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.TopAppBarDefaults
+import com.example.presentation.components.ChatDoodleWallpaper
 import com.example.presentation.components.ErrorBannerCard
 import com.example.presentation.components.LoadingStateBox
 import com.example.presentation.components.UserAvatar
+import com.example.ui.theme.BrandGreen
+import com.example.ui.theme.DeepIndigoInk
+import com.example.ui.theme.EmeraldButton
+import com.example.ui.theme.ForestGreenDarkHeader
+import com.example.ui.theme.ForestGreenHeader
+import com.example.ui.theme.IncomingBubbleDark
+import com.example.ui.theme.IncomingBubbleLight
+import com.example.ui.theme.MutedSlateDark
+import com.example.ui.theme.MutedSlateLight
 import com.example.ui.theme.OutgoingBubbleEnd
 import com.example.ui.theme.OutgoingBubbleStart
+import com.example.ui.theme.OutgoingGreenDark
+import com.example.ui.theme.OutgoingGreenLight
 import com.example.utils.DateTimeUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -115,7 +129,13 @@ fun CreateGroupScreen(
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
+            val isDark = isSystemInDarkTheme()
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = if (isDark) ForestGreenDarkHeader else ForestGreenHeader,
+                    navigationIconContentColor = Color.White,
+                    titleContentColor = Color.White
+                ),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -259,10 +279,19 @@ fun GroupChatScreen(
         if (uri != null && g != null) viewModel.sendGroupMedia(g, uri, MessageType.IMAGE)
     }
 
+    val isDark = isSystemInDarkTheme()
+    val headerColor = if (isDark) ForestGreenDarkHeader else ForestGreenHeader
+
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = headerColor,
+                    navigationIconContentColor = Color.White,
+                    titleContentColor = Color.White,
+                    actionIconContentColor = Color.White
+                ),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -279,13 +308,14 @@ fun GroupChatScreen(
                             Text(
                                 text = group?.name ?: "Group",
                                 style = MaterialTheme.typography.titleMedium,
+                                color = Color.White,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = "${group?.memberIds?.size ?: 0} members · Tap for info",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = Color.White.copy(alpha = 0.85f)
                             )
                         }
                     }
@@ -298,14 +328,15 @@ fun GroupChatScreen(
             )
         }
     ) { innerPadding ->
-        Column(
+        ChatDoodleWallpaper(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
                 .consumeWindowInsets(innerPadding)
         ) {
+        Column(modifier = Modifier.fillMaxSize()) {
             if (uploadProgress != null) {
-                LinearProgressIndicator(progress = { uploadProgress ?: 0f }, modifier = Modifier.fillMaxWidth())
+                LinearProgressIndicator(progress = { uploadProgress ?: 0f }, color = BrandGreen, modifier = Modifier.fillMaxWidth())
             }
             if (error != null) {
                 ErrorBannerCard(error!!, onRetry = viewModel::clearError, modifier = Modifier.padding(12.dp))
@@ -402,6 +433,7 @@ fun GroupChatScreen(
         }
     }
 }
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -411,9 +443,21 @@ private fun GroupMessageBubble(
     onReply: () -> Unit,
     onReact: (String) -> Unit
 ) {
+    val isDark = isSystemInDarkTheme()
     var showMenu by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(20.dp)
-    val textColor = if (isMine) Color.White else MaterialTheme.colorScheme.onSurface
+    val shape = if (isMine) {
+        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
+    } else {
+        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 16.dp)
+    }
+    val bubbleColor = when {
+        isMine && isDark -> OutgoingGreenDark
+        isMine -> OutgoingGreenLight
+        isDark -> IncomingBubbleDark
+        else -> IncomingBubbleLight
+    }
+    val textColor = if (isDark) Color(0xFFE9EDEF) else DeepIndigoInk
+    val metaColor = if (isDark) MutedSlateDark else MutedSlateLight
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -422,14 +466,11 @@ private fun GroupMessageBubble(
         Box {
             Surface(
                 shape = shape,
-                color = if (isMine) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerHigh,
+                shadowElevation = 0.8.dp,
+                color = bubbleColor,
                 modifier = Modifier
                     .widthIn(max = 300.dp)
                     .clip(shape)
-                    .then(
-                        if (isMine) Modifier.background(Brush.linearGradient(listOf(OutgoingBubbleStart, OutgoingBubbleEnd)))
-                        else Modifier
-                    )
                     .combinedClickable(onClick = {}, onLongClick = { showMenu = true })
             ) {
                 Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
@@ -437,7 +478,7 @@ private fun GroupMessageBubble(
                         Text(
                             text = message.senderName,
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
+                            color = BrandGreen
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                     }
@@ -470,7 +511,7 @@ private fun GroupMessageBubble(
                     Text(
                         text = DateTimeUtils.formatMessageTime(message.timestamp),
                         style = MaterialTheme.typography.labelSmall,
-                        color = textColor.copy(alpha = 0.78f),
+                        color = metaColor,
                         modifier = Modifier.align(Alignment.End)
                     )
                 }
@@ -528,6 +569,12 @@ fun GroupInfoScreen(
         contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = if (isSystemInDarkTheme()) ForestGreenDarkHeader else ForestGreenHeader,
+                    titleContentColor = Color.White,
+                    navigationIconContentColor = Color.White,
+                    actionIconContentColor = Color.White
+                ),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")

@@ -2,9 +2,12 @@ package com.example.calls
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.view.LayoutInflater
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,9 +35,11 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.Cameraswitch
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -55,10 +60,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.R
 import com.example.domain.model.CallSession
 import com.example.domain.model.CallStatus
 import com.example.domain.model.CallType
@@ -68,11 +76,12 @@ import com.example.presentation.components.EmptyIllustrationState
 import com.example.presentation.components.ErrorBannerCard
 import com.example.presentation.components.LoadingStateBox
 import com.example.presentation.components.UserAvatar
+import com.example.ui.theme.BrandGreen
 import com.example.ui.theme.DangerRose
-import com.example.ui.theme.DeepIndigoInk
-import com.example.ui.theme.IndigoPrimary
 import com.example.ui.theme.OnlineEmerald
-import com.example.ui.theme.VioletSecondary
+import com.example.ui.theme.VoiceCallGradientBottom
+import com.example.ui.theme.VoiceCallGradientMid
+import com.example.ui.theme.VoiceCallGradientTop
 import com.example.utils.DateTimeUtils
 import kotlinx.coroutines.delay
 import org.webrtc.SurfaceViewRenderer
@@ -97,7 +106,7 @@ fun CallHistoryTabContent(
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 96.dp, top = 8.dp)
+                    contentPadding = PaddingValues(bottom = 96.dp, top = 6.dp)
                 ) {
                     items(callsState.data, key = { it.id }) { call ->
                         val isOutgoing = call.callerId == currentUserId
@@ -109,45 +118,68 @@ fun CallHistoryTabContent(
                         val peerPhoto = peerProfile?.photoUrl
                             ?: if (isOutgoing) call.receiverPhotoUrl else call.callerPhotoUrl
 
+                        val isMissedOrRejected = call.statusEnum == CallStatus.MISSED || call.statusEnum == CallStatus.REJECTED
+                        val statusLabel = when {
+                            isMissedOrRejected -> "Missed call"
+                            isOutgoing -> "Outgoing call"
+                            else -> "Incoming call"
+                        }
+                        val statusIcon = when {
+                            isMissedOrRejected -> Icons.AutoMirrored.Filled.CallMissed
+                            isOutgoing -> Icons.AutoMirrored.Filled.CallMade
+                            else -> Icons.AutoMirrored.Filled.CallReceived
+                        }
+                        val tint = if (isMissedOrRejected) DangerRose else BrandGreen
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            UserAvatar(peerName, peerPhoto, size = 50.dp)
+                            UserAvatar(peerName, peerPhoto, size = 52.dp)
                             Spacer(modifier = Modifier.width(14.dp))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(peerName, style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    text = peerName,
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    val statusIcon = when {
-                                        call.statusEnum == CallStatus.MISSED || call.statusEnum == CallStatus.REJECTED -> Icons.AutoMirrored.Filled.CallMissed
-                                        isOutgoing -> Icons.AutoMirrored.Filled.CallMade
-                                        else -> Icons.AutoMirrored.Filled.CallReceived
-                                    }
-                                    val tint = if (call.statusEnum == CallStatus.MISSED || call.statusEnum == CallStatus.REJECTED) {
-                                        DangerRose
-                                    } else {
-                                        OnlineEmerald
-                                    }
                                     Icon(statusIcon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Spacer(modifier = Modifier.width(5.dp))
                                     Text(
-                                        text = "${call.typeEnum.name.lowercase().replaceFirstChar { it.uppercase() }} · ${DateTimeUtils.formatChatListTime(call.startedAt)}",
+                                        text = statusLabel,
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = if (isMissedOrRejected) DangerRose else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
+                            Text(
+                                text = DateTimeUtils.formatChatListTime(call.startedAt),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (isOutgoing || isMissedOrRejected) MaterialTheme.colorScheme.onSurfaceVariant else BrandGreen,
+                                modifier = Modifier.padding(end = 6.dp)
+                            )
                             if (peerProfile != null) {
-                                IconButton(onClick = { onStartVoiceCall(peerProfile) }) {
-                                    Icon(Icons.Default.Call, contentDescription = "Voice call")
-                                }
-                                IconButton(onClick = { onStartVideoCall(peerProfile) }) {
-                                    Icon(Icons.Default.Videocam, contentDescription = "Video call")
+                                IconButton(
+                                    onClick = {
+                                        if (call.typeEnum == CallType.VIDEO) onStartVideoCall(peerProfile)
+                                        else onStartVoiceCall(peerProfile)
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = if (call.typeEnum == CallType.VIDEO) Icons.Default.Videocam else Icons.Default.Call,
+                                        contentDescription = if (call.typeEnum == CallType.VIDEO) "Video call" else "Voice call",
+                                        tint = BrandGreen
+                                    )
                                 }
                             }
                         }
+                        HorizontalDivider(
+                            modifier = Modifier.padding(start = 82.dp, end = 16.dp),
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)
+                        )
                     }
                 }
             }
@@ -194,13 +226,27 @@ fun ActiveCallScreen(
 
     var localRenderer by remember { mutableStateOf<SurfaceViewRenderer?>(null) }
     var remoteRenderer by remember { mutableStateOf<SurfaceViewRenderer?>(null) }
+    var isClosing by remember { mutableStateOf(false) }
+
+    fun closeScreenSafely(endRemoteCall: Boolean) {
+        if (isClosing) return
+        isClosing = true
+        viewModel.detachRenderers(localRenderer, remoteRenderer)
+        localRenderer = null
+        remoteRenderer = null
+        if (endRemoteCall) {
+            viewModel.endCall(callId)
+        } else {
+            viewModel.closeLocalSession()
+        }
+        onCallClosed()
+    }
 
     LaunchedEffect(session, hasPermissions, hasCameraPermission) {
         val s = session ?: return@LaunchedEffect
         if (s.statusEnum == CallStatus.ENDED || s.statusEnum == CallStatus.REJECTED || s.statusEnum == CallStatus.MISSED) {
-            viewModel.closeLocalSession()
-            onCallClosed()
-        } else {
+            closeScreenSafely(endRemoteCall = false)
+        } else if (!isClosing) {
             viewModel.startWebRtcIfReady(s, hasPermissions, hasCameraPermission)
         }
     }
@@ -217,8 +263,8 @@ fun ActiveCallScreen(
 
     DisposableEffect(Unit) {
         onDispose {
-            localRenderer?.release()
-            remoteRenderer?.release()
+            viewModel.detachRenderers(localRenderer, remoteRenderer)
+            viewModel.closeLocalSession()
         }
     }
 
@@ -230,144 +276,242 @@ fun ActiveCallScreen(
     val incomingSession = current?.takeIf { !isCaller && it.statusEnum == CallStatus.RINGING }
     val isIncomingRinging = incomingSession != null
 
+    BackHandler {
+        closeScreenSafely(endRemoteCall = !isIncomingRinging)
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(DeepIndigoInk, Color(0xFF1E1747), Color(0xFF0A0818))))
-            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .background(
+                Brush.verticalGradient(
+                    listOf(VoiceCallGradientTop, VoiceCallGradientMid, VoiceCallGradientBottom)
+                )
+            )
     ) {
-        if (isVideo) {
+        if (isVideo && !isClosing) {
             AndroidView(
                 factory = { ctx ->
-                    SurfaceViewRenderer(ctx).also { r ->
-                        remoteRenderer = r
-                        viewModel.attachRenderers(localRenderer, r)
-                    }
+                    val renderer = LayoutInflater.from(ctx)
+                        .inflate(R.layout.view_remote_video_renderer, null, false) as SurfaceViewRenderer
+                    remoteRenderer = renderer
+                    viewModel.attachRemoteRenderer(renderer)
+                    renderer
+                },
+                onRelease = { renderer ->
+                    if (remoteRenderer === renderer) remoteRenderer = null
+                    viewModel.detachRemoteRenderer(renderer)
                 },
                 modifier = Modifier.fillMaxSize()
-            )
-            AndroidView(
-                factory = { ctx ->
-                    SurfaceViewRenderer(ctx).also { r ->
-                        localRenderer = r
-                        viewModel.attachRenderers(r, remoteRenderer)
-                    }
-                },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(16.dp)
-                    .size(width = 110.dp, height = 160.dp)
-                    .clip(RoundedCornerShape(18.dp))
             )
         }
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp),
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(horizontal = 24.dp, vertical = 18.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(top = 42.dp)
-            ) {
-                if (!isVideo) {
-                    UserAvatar(peerName ?: "Caller", peerPhoto, size = 112.dp)
-                    Spacer(modifier = Modifier.height(22.dp))
-                }
-                Text(
-                    text = peerName ?: "Connecting...",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = Color.White
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = when {
-                        isIncomingRinging -> "Incoming ${if (isVideo) "Video" else "Voice"} Call"
-                        current?.statusEnum == CallStatus.ACCEPTED -> DateTimeUtils.formatDurationMs(elapsedSeconds * 1000L)
-                        else -> connState
-                    },
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Color.White.copy(alpha = 0.78f)
-                )
-            }
-
-            if (incomingSession != null) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
+            if (isVideo) {
+                // Showcase #9 Video Call top timer + close/switch controls
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = when {
+                            isIncomingRinging -> "Incoming Video Call"
+                            current?.statusEnum == CallStatus.ACCEPTED -> DateTimeUtils.formatDurationMs(elapsedSeconds * 1000L)
+                            else -> connState
+                        },
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = Color.White,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
                     IconButton(
-                        onClick = { viewModel.rejectCall(incomingSession.id); onCallClosed() },
-                        modifier = Modifier.size(68.dp).clip(CircleShape).background(DangerRose)
+                        onClick = { closeScreenSafely(endRemoteCall = !isIncomingRinging) },
+                        modifier = Modifier.align(Alignment.CenterEnd)
                     ) {
-                        Icon(Icons.Default.CallEnd, contentDescription = "Decline", tint = Color.White, modifier = Modifier.size(30.dp))
-                    }
-                    IconButton(
-                        onClick = { viewModel.acceptIncomingCall(incomingSession, hasPermissions, hasCameraPermission) },
-                        modifier = Modifier.size(68.dp).clip(CircleShape).background(OnlineEmerald)
-                    ) {
-                        Icon(Icons.Default.Call, contentDescription = "Accept", tint = Color.White, modifier = Modifier.size(30.dp))
+                        Icon(Icons.Default.Close, contentDescription = "Close call view", tint = Color.White)
                     }
                 }
             } else {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 24.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
+                // Showcase #8 Voice Call layout
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(top = 36.dp)
                 ) {
-                    IconButton(
-                        onClick = viewModel::toggleMute,
+                    Text(
+                        text = when {
+                            isIncomingRinging -> "Incoming Voice Call…"
+                            current?.statusEnum == CallStatus.ACCEPTED -> DateTimeUtils.formatDurationMs(elapsedSeconds * 1000L)
+                            else -> "Calling..."
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White.copy(alpha = 0.88f)
+                    )
+                    Spacer(modifier = Modifier.height(34.dp))
+                    Box(
                         modifier = Modifier
-                            .size(56.dp)
+                            .size(144.dp)
                             .clip(CircleShape)
-                            .background(if (isMuted) Color.White else Color.White.copy(alpha = 0.16f))
+                            .border(3.dp, Color.White.copy(alpha = 0.85f), CircleShape)
+                            .padding(3.dp)
                     ) {
-                        Icon(
-                            if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
-                            contentDescription = "Mute",
-                            tint = if (isMuted) Color.Black else Color.White
+                        UserAvatar(
+                            name = peerName ?: "Caller",
+                            photoUrl = peerPhoto,
+                            size = 138.dp
                         )
                     }
-                    IconButton(
-                        onClick = viewModel::toggleSpeaker,
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Text(
+                        text = peerName ?: "Connecting...",
+                        style = MaterialTheme.typography.headlineLarge.copy(
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Bold
+                        ),
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = if (current?.statusEnum == CallStatus.ACCEPTED) "Connected · Voice Call" else "Voice Call",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color.White.copy(alpha = 0.78f)
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.End
+            ) {
+                // Floating bottom-right PiP local camera preview matching Showcase #9
+                if (isVideo && !isClosing && hasCameraPermission) {
+                    Box(
                         modifier = Modifier
-                            .size(56.dp)
-                            .clip(CircleShape)
-                            .background(if (isSpeaker) Color.White else Color.White.copy(alpha = 0.16f))
+                            .padding(bottom = 18.dp)
+                            .size(width = 104.dp, height = 148.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .border(1.5.dp, Color.White.copy(alpha = 0.8f), RoundedCornerShape(16.dp))
                     ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.VolumeUp,
-                            contentDescription = "Speaker",
-                            tint = if (isSpeaker) Color.Black else Color.White
+                        AndroidView(
+                            factory = { ctx ->
+                                val renderer = LayoutInflater.from(ctx)
+                                    .inflate(R.layout.view_local_video_renderer, null, false) as SurfaceViewRenderer
+                                localRenderer = renderer
+                                viewModel.attachLocalRenderer(renderer)
+                                renderer
+                            },
+                            onRelease = { renderer ->
+                                if (localRenderer === renderer) localRenderer = null
+                                viewModel.detachLocalRenderer(renderer)
+                            },
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
-                    if (isVideo) {
+                }
+
+                if (incomingSession != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 22.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
                         IconButton(
-                            onClick = viewModel::switchCamera,
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.16f))
+                            onClick = {
+                                if (!isClosing) {
+                                    isClosing = true
+                                    viewModel.detachRenderers(localRenderer, remoteRenderer)
+                                    localRenderer = null
+                                    remoteRenderer = null
+                                    viewModel.rejectCall(incomingSession.id)
+                                    onCallClosed()
+                                }
+                            },
+                            modifier = Modifier.size(68.dp).clip(CircleShape).background(DangerRose)
                         ) {
-                            Icon(Icons.Default.Cameraswitch, contentDescription = "Switch camera", tint = Color.White)
+                            Icon(Icons.Default.CallEnd, contentDescription = "Decline", tint = Color.White, modifier = Modifier.size(30.dp))
+                        }
+                        IconButton(
+                            onClick = { viewModel.acceptIncomingCall(incomingSession, hasPermissions, hasCameraPermission) },
+                            modifier = Modifier.size(68.dp).clip(CircleShape).background(OnlineEmerald)
+                        ) {
+                            Icon(Icons.Default.Call, contentDescription = "Accept", tint = Color.White, modifier = Modifier.size(30.dp))
                         }
                     }
-                    IconButton(
-                        onClick = {
-                            viewModel.endCall(callId)
-                            onCallClosed()
-                        },
+                } else {
+                    Row(
                         modifier = Modifier
-                            .size(64.dp)
-                            .clip(CircleShape)
-                            .background(DangerRose)
-                            .testTag("end_call_button")
+                            .fillMaxWidth()
+                            .padding(bottom = 20.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.CallEnd, contentDescription = "End call", tint = Color.White, modifier = Modifier.size(28.dp))
+                        if (isVideo) {
+                            IconButton(
+                                onClick = viewModel::switchCamera,
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.45f))
+                            ) {
+                                Icon(Icons.Default.Cameraswitch, contentDescription = "Switch camera", tint = Color.White)
+                            }
+                        } else {
+                            IconButton(
+                                onClick = viewModel::toggleMute,
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isMuted) Color.White else Color.White.copy(alpha = 0.22f))
+                            ) {
+                                Icon(
+                                    if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                                    contentDescription = "Mute",
+                                    tint = if (isMuted) Color.Black else Color.White
+                                )
+                            }
+                        }
+
+                        IconButton(
+                            onClick = { closeScreenSafely(endRemoteCall = true) },
+                            modifier = Modifier
+                                .size(66.dp)
+                                .clip(CircleShape)
+                                .background(DangerRose)
+                                .testTag("end_call_button")
+                        ) {
+                            Icon(Icons.Default.CallEnd, contentDescription = "End call", tint = Color.White, modifier = Modifier.size(30.dp))
+                        }
+
+                        if (isVideo) {
+                            IconButton(
+                                onClick = viewModel::toggleMute,
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isMuted) Color.White else Color.Black.copy(alpha = 0.45f))
+                            ) {
+                                Icon(
+                                    if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                                    contentDescription = "Mute",
+                                    tint = if (isMuted) Color.Black else Color.White
+                                )
+                            }
+                        } else {
+                            IconButton(
+                                onClick = viewModel::toggleSpeaker,
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isSpeaker) Color.White else Color.White.copy(alpha = 0.22f))
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.VolumeUp,
+                                    contentDescription = "Speaker",
+                                    tint = if (isSpeaker) Color.Black else Color.White
+                                )
+                            }
+                        }
                     }
                 }
             }

@@ -8,7 +8,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -47,18 +46,20 @@ import com.example.groups.GroupInfoScreen
 import com.example.groups.GroupsViewModel
 import com.example.messaging.ChatDetailScreen
 import com.example.messaging.ChatDetailViewModel
-import com.example.presentation.components.LoadingStateBox
+import com.example.notifications.BackgroundNotificationService
+import com.example.presentation.components.BrandedSplashScreen
 import com.example.presentation.home.HomeScreen
 import com.example.presentation.home.HomeViewModel
 import com.example.profile.ProfileSettingsViewModel
 import com.example.settings.BlockedContactsScreen
 import com.example.settings.EditProfileScreen
-import com.example.settings.ProfileTabContent
+import com.example.settings.ProfileScreen
 import com.example.settings.SettingsScreen
 import com.example.status.CreateStatusScreen
 import com.example.status.StatusViewModel
 import com.example.status.StatusViewerScreen
 import com.google.firebase.installations.FirebaseInstallations
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.tasks.await
 
 object Routes {
@@ -70,6 +71,7 @@ object Routes {
     const val CREATE_STATUS = "create_status"
     const val VIEW_STATUS = "view_status/{userId}"
     const val ACTIVE_CALL = "active_call/{callId}"
+    const val PROFILE = "profile"
     const val EDIT_PROFILE = "edit_profile"
     const val SETTINGS = "settings"
     const val BLOCKED_CONTACTS = "blocked_contacts"
@@ -91,6 +93,12 @@ fun AppNavigation(container: AppContainer) {
         .collectAsStateWithLifecycle(initialValue = container.authAndUserRepository.currentUser())
 
     var silentAttempted by remember { mutableStateOf(false) }
+    var splashCompleted by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        delay(850L)
+        splashCompleted = true
+    }
 
     LaunchedEffect(Unit) {
         if (!silentAttempted) {
@@ -98,6 +106,11 @@ fun AppNavigation(container: AppContainer) {
             withFrameNanos {}
             container.authAndUserRepository.attemptSilentGoogleSignIn(context)
         }
+    }
+
+    if (!splashCompleted) {
+        BrandedSplashScreen()
+        return
     }
 
     val user = currentUser
@@ -140,9 +153,15 @@ private fun AuthenticatedShell(
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) {}
+    ) { granted ->
+        if (granted) {
+            container.notificationMonitor.start(currentUserId)
+            BackgroundNotificationService.start(context)
+        }
+    }
 
     LaunchedEffect(currentUserId) {
+        container.notificationMonitor.start(currentUserId)
         val existing = container.authAndUserRepository.getUserProfileOnce(currentUserId)
         needsProfileSetup = existing == null || existing.displayName.isBlank()
         profileChecked = true
@@ -161,11 +180,13 @@ private fun AuthenticatedShell(
             != PackageManager.PERMISSION_GRANTED
         ) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            BackgroundNotificationService.start(context)
         }
     }
 
     if (!profileChecked) {
-        LoadingStateBox("Preparing your workspace...")
+        BrandedSplashScreen()
         return
     }
 
@@ -191,13 +212,6 @@ private fun AuthenticatedShell(
     }
 
     val navController = rememberNavController()
-
-    DisposableEffect(currentUserId) {
-        container.notificationMonitor.start(currentUserId)
-        onDispose {
-            container.notificationMonitor.stop()
-        }
-    }
 
     val pendingNavTarget by container.notificationMonitor.pendingNavTarget.collectAsStateWithLifecycle()
     LaunchedEffect(pendingNavTarget) {
@@ -314,6 +328,9 @@ private fun AuthenticatedShell(
                     onCreateStatus = { navController.navigate(Routes.CREATE_STATUS) },
                     onViewUserStatuses = { uid -> navController.navigate(Routes.viewStatus(uid)) },
                     onOpenAddContact = { tab -> navController.navigate(Routes.addContact(tab)) },
+                    onOpenMyQr = { navController.navigate(Routes.MY_QR_CODE) },
+                    onOpenProfile = { navController.navigate(Routes.PROFILE) },
+                    onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                     onStartVoiceCall = { peer ->
                         callsViewModel.startOutgoingCall(peer, CallType.VOICE) { callId ->
                             navController.navigate(Routes.activeCall(callId))
@@ -340,16 +357,19 @@ private fun AuthenticatedShell(
                                 }
                             }
                         )
-                    },
-                    profileTabContent = {
-                        ProfileTabContent(
-                            viewModel = profileSettingsViewModel,
-                            onEditProfile = { navController.navigate(Routes.EDIT_PROFILE) },
-                            onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-                            onOpenMyQr = { navController.navigate(Routes.MY_QR_CODE) },
-                            onOpenAddContact = { navController.navigate(Routes.addContact(AddContactTab.PHONE)) }
-                        )
                     }
+                )
+            }
+
+            composable(Routes.PROFILE) {
+                ProfileScreen(
+                    viewModel = profileSettingsViewModel,
+                    onBack = { navController.popBackStack() },
+                    onEditProfile = { navController.navigate(Routes.EDIT_PROFILE) },
+                    onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                    onOpenBlocked = { navController.navigate(Routes.BLOCKED_CONTACTS) },
+                    onOpenMyQr = { navController.navigate(Routes.MY_QR_CODE) },
+                    onOpenAddContact = { navController.navigate(Routes.addContact(AddContactTab.PHONE)) }
                 )
             }
 

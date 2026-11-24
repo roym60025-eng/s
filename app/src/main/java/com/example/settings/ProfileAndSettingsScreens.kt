@@ -3,7 +3,11 @@ package com.example.settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,10 +21,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -28,16 +35,23 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -52,6 +66,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,24 +74,33 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.domain.model.ThemeMode
 import com.example.presentation.components.EmptyIllustrationState
+import com.example.presentation.components.ErrorBannerCard
 import com.example.presentation.components.UserAvatar
 import com.example.profile.ProfileSettingsViewModel
-
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.FilledTonalIconButton
-import com.example.presentation.components.ErrorBannerCard
+import com.example.ui.theme.BrandGreen
+import com.example.ui.theme.EmeraldButton
+import com.example.ui.theme.ForestGreenDarkHeader
+import com.example.ui.theme.ForestGreenHeader
 
 @Composable
-fun ProfileTabContent(
+fun ProfileScreen(
     viewModel: ProfileSettingsViewModel,
+    onBack: () -> Unit,
     onEditProfile: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenBlocked: () -> Unit,
     onOpenMyQr: () -> Unit,
     onOpenAddContact: () -> Unit
 ) {
@@ -87,177 +111,311 @@ fun ProfileTabContent(
     val statusMessage by viewModel.statusMessage.collectAsStateWithLifecycle()
     val isErrorStatus by viewModel.isErrorStatus.collectAsStateWithLifecycle()
 
+    var showMenu by remember { mutableStateOf(false) }
+
     val photoPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
     ) { uri -> if (uri != null) viewModel.uploadNewAvatar(uri) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        if (uploadProgress != null) {
-            LinearProgressIndicator(progress = { uploadProgress ?: 0f }, modifier = Modifier.fillMaxWidth())
-            Spacer(modifier = Modifier.height(10.dp))
-        }
+    val isDark = isSystemInDarkTheme()
+    val headerColor = if (isDark) ForestGreenDarkHeader else ForestGreenHeader
 
-        if (statusMessage != null) {
-            if (isErrorStatus) {
-                ErrorBannerCard(
-                    message = statusMessage.orEmpty(),
-                    onRetry = viewModel::clearStatusMessage
-                )
-            } else {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer
+    Scaffold(
+        contentWindowInsets = WindowInsets.safeDrawing
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = innerPadding.calculateBottomPadding())
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Showcase #10 Curved Forest Green Hero Header + Overlapping Avatar with Camera Badge
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(236.dp)
+            ) {
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(178.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = statusMessage.orEmpty(),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(onClick = viewModel::clearStatusMessage) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "Dismiss",
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    val w = size.width
+                    val h = size.height
+                    val path = Path().apply {
+                        moveTo(0f, 0f)
+                        lineTo(w, 0f)
+                        lineTo(w, h * 0.72f)
+                        quadraticTo(w * 0.5f, h * 1.12f, 0f, h * 0.72f)
+                        close()
+                    }
+                    drawPath(path = path, color = headerColor)
+                }
+
+                // Top bar navigation inside curved green arch
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onBack, modifier = Modifier.testTag("profile_back_button")) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+                    }
+                    Box {
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Profile options", tint = Color.White)
+                        }
+                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("Edit Profile") },
+                                onClick = { showMenu = false; onEditProfile() }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Settings") },
+                                onClick = { showMenu = false; onOpenSettings() }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Log Out") },
+                                onClick = { showMenu = false; viewModel.signOut(context) }
                             )
                         }
                     }
                 }
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-        }
 
-        Box(
-            contentAlignment = Alignment.BottomEnd,
-            modifier = Modifier
-                .clickable(enabled = uploadProgress == null) {
-                    photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                // Centered Avatar straddling bottom of curved green arch
+                Box(
+                    contentAlignment = Alignment.BottomEnd,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .clickable(enabled = uploadProgress == null) {
+                            photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        }
+                        .testTag("profile_avatar_container")
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(130.dp)
+                            .clip(CircleShape)
+                            .border(4.dp, MaterialTheme.colorScheme.background, CircleShape)
+                            .padding(2.dp)
+                    ) {
+                        UserAvatar(
+                            name = profile?.displayName ?: "Member",
+                            photoUrl = profile?.photoUrl,
+                            size = 126.dp,
+                            isOnline = false
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF1F2C34))
+                            .border(2.dp, MaterialTheme.colorScheme.background, CircleShape)
+                            .clickable(enabled = uploadProgress == null) {
+                                photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            }
+                            .testTag("change_profile_photo_button"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PhotoCamera,
+                            contentDescription = "Change avatar",
+                            tint = Color.White,
+                            modifier = Modifier.size(19.dp)
+                        )
+                    }
                 }
-                .testTag("profile_avatar_container")
-        ) {
-            UserAvatar(
-                name = profile?.displayName ?: "Member",
-                photoUrl = profile?.photoUrl,
-                size = 104.dp,
-                isOnline = true
+            }
+
+            if (uploadProgress != null) {
+                LinearProgressIndicator(
+                    progress = { uploadProgress ?: 0f },
+                    color = BrandGreen,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 6.dp)
+                )
+            }
+
+            if (statusMessage != null) {
+                Box(modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
+                    if (isErrorStatus) {
+                        ErrorBannerCard(
+                            message = statusMessage.orEmpty(),
+                            onRetry = viewModel::clearStatusMessage
+                        )
+                    } else {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = statusMessage.orEmpty(),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IconButton(onClick = viewModel::clearStatusMessage) {
+                                    Icon(Icons.Default.Close, contentDescription = "Dismiss")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = profile?.displayName ?: "Manoj & Sonali User",
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold
+                )
             )
-            FilledTonalIconButton(
-                onClick = {
-                    photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                },
-                enabled = uploadProgress == null,
-                modifier = Modifier.testTag("change_profile_photo_button")
-            ) {
-                Icon(Icons.Default.AddAPhoto, contentDescription = "Change avatar")
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "Online",
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = BrandGreen
+            )
+            val contactLine = settings?.phoneNumber ?: settings?.email
+            if (!contactLine.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = contactLine,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-        }
 
-        Spacer(modifier = Modifier.height(6.dp))
-        TextButton(
-            onClick = {
-                photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-            },
-            enabled = uploadProgress == null
-        ) {
-            Text(if (uploadProgress != null) "Updating photo..." else "Change profile photo")
-        }
+            Spacer(modifier = Modifier.height(18.dp))
 
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = profile?.displayName ?: "Manoj & Sonali User",
-            style = MaterialTheme.typography.headlineMedium
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = settings?.phoneNumber ?: settings?.email ?: "Verified Member",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Surface(
-            shape = RoundedCornerShape(18.dp),
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("About", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            // About Section matching Showcase #10
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onEditProfile)
+                    .padding(horizontal = 20.dp, vertical = 10.dp)
+                    .testTag("edit_profile_button")
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "About",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit profile",
+                        tint = BrandGreen,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(profile?.about ?: "Available on Manoj & Sonali", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    text = profile?.about ?: "Keep Smiling... 😊",
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
             }
-        }
 
-        Spacer(modifier = Modifier.height(20.dp))
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+            )
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            FilledTonalButton(
+            // Action Rows matching Showcase #10 clean list style
+            ProfileMenuRow(
+                icon = Icons.Default.QrCode2,
+                title = "My QR Code",
                 onClick = onOpenMyQr,
-                modifier = Modifier.weight(1f).height(50.dp).testTag("profile_my_qr_button"),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Icon(Icons.Default.QrCode2, contentDescription = null)
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("My QR Code")
-            }
-            FilledTonalButton(
+                modifier = Modifier.testTag("profile_my_qr_button")
+            )
+            ProfileMenuRow(
+                icon = Icons.Default.PersonAdd,
+                title = "Add Contact",
                 onClick = onOpenAddContact,
-                modifier = Modifier.weight(1f).height(50.dp).testTag("profile_add_contact_button"),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Icon(Icons.Default.PersonAdd, contentDescription = null)
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Add Contact")
-            }
+                modifier = Modifier.testTag("profile_add_contact_button")
+            )
+            ProfileMenuRow(
+                icon = Icons.Default.Notifications,
+                title = "Notifications",
+                onClick = onOpenSettings,
+                modifier = Modifier.testTag("open_settings_button")
+            )
+            ProfileMenuRow(
+                icon = Icons.Default.Lock,
+                title = "Privacy",
+                trailingText = "${settings?.blockedUserIds?.size ?: 0} blocked",
+                onClick = onOpenBlocked
+            )
+            ProfileMenuRow(
+                icon = Icons.Default.Settings,
+                title = "Theme & Preferences",
+                onClick = onOpenSettings
+            )
+            ProfileMenuRow(
+                icon = Icons.AutoMirrored.Filled.ExitToApp,
+                title = "Log Out",
+                iconTint = MaterialTheme.colorScheme.error,
+                titleColor = MaterialTheme.colorScheme.error,
+                onClick = { viewModel.signOut(context) },
+                modifier = Modifier.testTag("profile_logout_button")
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
         }
+    }
+}
 
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Button(
-            onClick = onEditProfile,
-            modifier = Modifier.fillMaxWidth().height(50.dp).testTag("edit_profile_button"),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Icon(Icons.Default.Edit, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Edit Profile")
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        OutlinedButton(
-            onClick = onOpenSettings,
-            modifier = Modifier.fillMaxWidth().height(50.dp).testTag("open_settings_button"),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Icon(Icons.Default.Settings, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Privacy, Notifications & Theme")
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        OutlinedButton(
-            onClick = { viewModel.signOut(context) },
-            modifier = Modifier.fillMaxWidth().height(50.dp).testTag("profile_logout_button"),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Log Out")
+@Composable
+private fun ProfileMenuRow(
+    icon: ImageVector,
+    title: String,
+    trailingText: String? = null,
+    iconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    titleColor: Color = MaterialTheme.colorScheme.onSurface,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 22.dp, vertical = 15.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = title,
+            tint = iconTint,
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(modifier = Modifier.width(18.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+            color = titleColor,
+            modifier = Modifier.weight(1f)
+        )
+        if (!trailingText.isNullOrBlank()) {
+            Text(
+                text = trailingText,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -278,6 +436,9 @@ fun EditProfileScreen(
     var about by remember(profile) { mutableStateOf(profile?.about.orEmpty()) }
     var phone by remember(settings) { mutableStateOf(settings?.phoneNumber.orEmpty()) }
 
+    val isDark = isSystemInDarkTheme()
+    val headerColor = if (isDark) ForestGreenDarkHeader else ForestGreenHeader
+
     val photoPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
     ) { uri -> if (uri != null) viewModel.uploadNewAvatar(uri) }
@@ -286,6 +447,11 @@ fun EditProfileScreen(
         contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = headerColor,
+                    navigationIconContentColor = Color.White,
+                    titleContentColor = Color.White
+                ),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -305,7 +471,7 @@ fun EditProfileScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (uploadProgress != null) {
-                LinearProgressIndicator(progress = { uploadProgress ?: 0f }, modifier = Modifier.fillMaxWidth())
+                LinearProgressIndicator(progress = { uploadProgress ?: 0f }, color = BrandGreen, modifier = Modifier.fillMaxWidth())
             }
             if (statusMessage != null && isErrorStatus) {
                 ErrorBannerCard(
@@ -361,7 +527,8 @@ fun EditProfileScreen(
                 onClick = { viewModel.saveProfileEdits(name, about, phone, onBack) },
                 enabled = name.isNotBlank() && uploadProgress == null,
                 modifier = Modifier.fillMaxWidth().height(54.dp),
-                shape = RoundedCornerShape(18.dp)
+                shape = RoundedCornerShape(28.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = EmeraldButton)
             ) {
                 Text("Save Changes")
             }
@@ -381,10 +548,18 @@ fun SettingsScreen(
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
+    val isDark = isSystemInDarkTheme()
+    val headerColor = if (isDark) ForestGreenDarkHeader else ForestGreenHeader
+
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = headerColor,
+                    navigationIconContentColor = Color.White,
+                    titleContentColor = Color.White
+                ),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -400,7 +575,7 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item {
-                Text("Appearance", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                Text("Appearance", style = MaterialTheme.typography.titleMedium, color = BrandGreen)
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ThemeMode.entries.forEach { mode ->
@@ -416,7 +591,7 @@ fun SettingsScreen(
             item { HorizontalDivider() }
 
             item {
-                Text("Privacy", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                Text("Privacy", style = MaterialTheme.typography.titleMedium, color = BrandGreen)
             }
             item {
                 SettingToggleRow(
@@ -466,7 +641,7 @@ fun SettingsScreen(
             item { HorizontalDivider() }
 
             item {
-                Text("Notifications", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                Text("Notifications", style = MaterialTheme.typography.titleMedium, color = BrandGreen)
             }
             item {
                 SettingToggleRow(
@@ -558,10 +733,18 @@ fun BlockedContactsScreen(
     val blockedIds = settings?.blockedUserIds.orEmpty()
     val usersMap = remember(allUsers) { allUsers.associateBy { it.uid } }
 
+    val isDark = isSystemInDarkTheme()
+    val headerColor = if (isDark) ForestGreenDarkHeader else ForestGreenHeader
+
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = headerColor,
+                    navigationIconContentColor = Color.White,
+                    titleContentColor = Color.White
+                ),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")

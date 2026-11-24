@@ -1,6 +1,7 @@
 package com.example.notifications
 
 import android.Manifest
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -57,19 +58,34 @@ class ManojSonaliMessagingService : FirebaseMessagingService() {
                 val channels = listOf(
                     NotificationChannel(
                         CHANNEL_MESSAGES,
-                        "Direct Messages",
+                        "Incoming Messages",
                         NotificationManager.IMPORTANCE_HIGH
-                    ).apply { description = "1-to-1 chat notifications" },
+                    ).apply {
+                        description = "Heads-up notifications for 1-to-1 chat messages"
+                        enableLights(true)
+                        enableVibration(true)
+                        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                    },
                     NotificationChannel(
                         CHANNEL_GROUPS,
                         "Group Messages",
                         NotificationManager.IMPORTANCE_HIGH
-                    ).apply { description = "Group chat notifications" },
+                    ).apply {
+                        description = "Heads-up notifications for group chat messages"
+                        enableLights(true)
+                        enableVibration(true)
+                        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                    },
                     NotificationChannel(
                         CHANNEL_CALLS,
                         "Voice & Video Calls",
                         NotificationManager.IMPORTANCE_HIGH
-                    ).apply { description = "Incoming and missed call alerts" },
+                    ).apply {
+                        description = "Incoming and missed call alerts"
+                        enableLights(true)
+                        enableVibration(true)
+                        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                    },
                     NotificationChannel(
                         CHANNEL_STATUS,
                         "Status Updates",

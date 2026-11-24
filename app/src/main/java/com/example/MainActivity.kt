@@ -13,6 +13,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.example.domain.model.ThemeMode
 import com.example.navigation.AppNavigation
+import com.example.notifications.BackgroundNotificationService
 import com.example.ui.theme.ManojSonaliTheme
 import kotlinx.coroutines.launch
 
@@ -28,6 +29,10 @@ class MainActivity : ComponentActivity() {
             when (event) {
                 Lifecycle.Event.ON_START -> {
                     container.notificationMonitor.setAppForeground(true)
+                    container.auth.currentUser?.let { user ->
+                        container.notificationMonitor.start(user.uid)
+                        BackgroundNotificationService.start(this@MainActivity)
+                    }
                     lifecycleScope.launch { container.authAndUserRepository.updatePresence(true) }
                 }
                 Lifecycle.Event.ON_STOP -> {

@@ -74,11 +74,17 @@ import com.example.presentation.components.UserAvatar
 import com.example.utils.DateTimeUtils
 import kotlinx.coroutines.delay
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.TopAppBarDefaults
+import com.example.ui.theme.EmeraldButton
+import com.example.ui.theme.ForestGreenDarkHeader
+import com.example.ui.theme.ForestGreenHeader
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -94,7 +100,7 @@ fun CreateStatusScreen(
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
     var mediaType by remember { mutableStateOf(StatusType.TEXT) }
     var privacy by remember { mutableStateOf(StatusPrivacy.ALL_CONTACTS) }
-    val palette = listOf("#4B3FE2", "#7B4DFF", "#1D4ED8", "#0F766E", "#9333EA")
+    val palette = listOf("#075E54", "#12A84B", "#0F766E", "#1D4ED8", "#D8005C")
     var bgHex by remember { mutableStateOf(palette.first()) }
 
     val imagePicker = rememberLauncherForActivityResult(
@@ -117,10 +123,18 @@ fun CreateStatusScreen(
         }
     }
 
+    val isDark = isSystemInDarkTheme()
+    val headerColor = if (isDark) ForestGreenDarkHeader else ForestGreenHeader
+
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = headerColor,
+                    navigationIconContentColor = Color.White,
+                    titleContentColor = Color.White
+                ),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -276,7 +290,8 @@ fun CreateStatusScreen(
                     .fillMaxWidth()
                     .height(54.dp)
                     .testTag("post_status_button"),
-                shape = RoundedCornerShape(18.dp)
+                shape = RoundedCornerShape(28.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = EmeraldButton)
             ) {
                 if (isPosting || uploadProgress != null) {
                     CircularProgressIndicator(

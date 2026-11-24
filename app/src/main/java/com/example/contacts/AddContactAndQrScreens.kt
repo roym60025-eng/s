@@ -105,6 +105,10 @@ import com.example.domain.model.UserProfile
 import com.example.presentation.components.ErrorBannerCard
 import com.example.presentation.components.UserAvatar
 import com.example.security.InputValidator
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.TopAppBarDefaults
+import com.example.ui.theme.ForestGreenDarkHeader
+import com.example.ui.theme.ForestGreenHeader
 import com.example.ui.theme.IndigoPrimary
 import com.example.ui.theme.OnlineEmerald
 import com.example.ui.theme.SoftBlueTertiary
@@ -132,6 +136,12 @@ fun AddContactScreen(
         contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = if (isSystemInDarkTheme()) ForestGreenDarkHeader else ForestGreenHeader,
+                    titleContentColor = Color.White,
+                    navigationIconContentColor = Color.White,
+                    actionIconContentColor = Color.White
+                ),
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.testTag("add_contact_back")) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -578,12 +588,15 @@ private fun QrScannerTabContent(
             DisposableEffect(lifecycleOwner) {
                 val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
                 val mainExecutor = ContextCompat.getMainExecutor(context)
+                var boundPreview: Preview? = null
+                var boundAnalysis: ImageAnalysis? = null
 
                 cameraProviderFuture.addListener({
                     val provider = cameraProviderFuture.get()
                     val preview = Preview.Builder().build().also {
                         it.surfaceProvider = previewView.surfaceProvider
                     }
+                    boundPreview = preview
                     var lastAnalyzedMs = 0L
                     val analysis = ImageAnalysis.Builder()
                         .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
@@ -605,6 +618,7 @@ private fun QrScannerTabContent(
                                 }
                             }
                         }
+                    boundAnalysis = analysis
 
                     try {
                         provider.unbindAll()
@@ -620,7 +634,11 @@ private fun QrScannerTabContent(
 
                 onDispose {
                     try {
-                        cameraProviderFuture.get().unbindAll()
+                        boundPreview?.surfaceProvider = null
+                        boundAnalysis?.clearAnalyzer()
+                        if (cameraProviderFuture.isDone) {
+                            cameraProviderFuture.get().unbindAll()
+                        }
                     } catch (_: Exception) {
                     }
                     analysisExecutor.shutdown()
@@ -877,6 +895,12 @@ fun MyQrCodeScreen(
         contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = if (isSystemInDarkTheme()) ForestGreenDarkHeader else ForestGreenHeader,
+                    titleContentColor = Color.White,
+                    navigationIconContentColor = Color.White,
+                    actionIconContentColor = Color.White
+                ),
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.testTag("my_qr_back")) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")

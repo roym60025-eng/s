@@ -60,11 +60,13 @@ fun CameraCaptureScreen(
     DisposableEffect(lensFacing) {
         val future = ProcessCameraProvider.getInstance(context)
         val executor = ContextCompat.getMainExecutor(context)
+        var boundPreview: Preview? = null
         future.addListener({
             val provider = future.get()
             val preview = Preview.Builder().build().also {
                 it.surfaceProvider = previewView.surfaceProvider
             }
+            boundPreview = preview
             val selector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
             try {
                 provider.unbindAll()
@@ -75,7 +77,10 @@ fun CameraCaptureScreen(
 
         onDispose {
             try {
-                future.get().unbindAll()
+                boundPreview?.surfaceProvider = null
+                if (future.isDone) {
+                    future.get().unbindAll()
+                }
             } catch (_: Exception) {
             }
         }

@@ -28,7 +28,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 enum class HomeTab {
-    CHATS, GROUPS, CALLS, PROFILE
+    CHATS, STATUS, CALLS
 }
 
 class HomeViewModel(

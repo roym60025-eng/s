@@ -198,16 +198,28 @@ class AuthAndUserRepository(
     }
 
     private fun isProbablyEmulator(): Boolean {
-        return Build.FINGERPRINT.startsWith("generic") ||
-            Build.FINGERPRINT.startsWith("unknown") ||
-            Build.MODEL.contains("google_sdk") ||
-            Build.MODEL.contains("Emulator") ||
-            Build.MODEL.contains("Android SDK built for") ||
-            Build.MANUFACTURER.contains("Genymotion") ||
-            Build.PRODUCT.contains("sdk_gphone") ||
-            Build.PRODUCT.contains("emulator") ||
-            Build.HARDWARE.contains("ranchu") ||
-            Build.HARDWARE.contains("goldfish")
+        val fp = Build.FINGERPRINT.lowercase()
+        val model = Build.MODEL.lowercase()
+        val product = Build.PRODUCT.lowercase()
+        val hw = Build.HARDWARE.lowercase()
+        val device = Build.DEVICE.lowercase()
+        return fp.startsWith("generic") ||
+            fp.startsWith("unknown") ||
+            fp.contains("emulator") ||
+            fp.contains("vsoc") ||
+            model.contains("google_sdk") ||
+            model.contains("emulator") ||
+            model.contains("cuttlefish") ||
+            model.contains("android sdk built for") ||
+            Build.MANUFACTURER.contains("Genymotion", ignoreCase = true) ||
+            product.contains("sdk_gphone") ||
+            product.contains("emulator") ||
+            product.contains("vsoc") ||
+            product.contains("cf_") ||
+            device.contains("vsoc") ||
+            hw.contains("ranchu") ||
+            hw.contains("goldfish") ||
+            hw.contains("cutf")
     }
 
     private fun mapPhoneAuthError(e: Exception): String {
@@ -220,10 +232,15 @@ class AuthAndUserRepository(
                 "Too many verification requests from this device or project. Please wait a bit or sign in with Google."
             e is FirebaseAuthMissingActivityForRecaptchaException ->
                 "Unable to open verification challenge. Please try again or sign in with Google."
-            code == "ERROR_OPERATION_NOT_ALLOWED" || raw.contains("OPERATION_NOT_ALLOWED", ignoreCase = true) ||
+            code == "ERROR_OPERATION_NOT_ALLOWED" ||
+                raw.contains("17006") ||
+                raw.contains("OPERATION_NOT_ALLOWED", ignoreCase = true) ||
+                raw.contains("not allowed", ignoreCase = true) ||
                 raw.contains("sign-in provider is disabled", ignoreCase = true) ->
-                "Phone sign-in is not enabled yet in Firebase Console. Enable Phone Auth there, or sign in instantly with Google below."
-            raw.contains("Integrity", ignoreCase = true) ||
+                "SMS OTP was blocked by Firebase (error 17006). Even when Phone is enabled, Firebase Spark ($0) projects with Identity Platform block live SMS unless you add a Test Phone Number under Phone settings (or upgrade to Blaze and allow your country under Authentication > Settings > SMS region policy). You can also sign in with Google below."
+            raw.contains("17028") ||
+                raw.contains("17093") ||
+                raw.contains("Integrity", ignoreCase = true) ||
                 raw.contains("reCAPTCHA", ignoreCase = true) ||
                 raw.contains("Recaptcha", ignoreCase = true) ||
                 raw.contains("Play Store", ignoreCase = true) ||
@@ -239,7 +256,11 @@ class AuthAndUserRepository(
         return try {
             val current = auth.currentUser
             val user = if (current != null) {
-                current.linkWithCredential(credential).await().user ?: current
+                try {
+                    current.linkWithCredential(credential).await().user ?: current
+                } catch (_: Exception) {
+                    auth.signInWithCredential(credential).await().user ?: current
+                }
             } else {
                 auth.signInWithCredential(credential).await().user
                     ?: return Result.failure(IllegalStateException("Phone sign-in failed."))

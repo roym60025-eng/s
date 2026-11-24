@@ -53,8 +53,24 @@ class CallsViewModel(
         }
     }
 
-    fun attachRenderers(local: SurfaceViewRenderer?, remote: SurfaceViewRenderer?) {
-        webRtcCallManager.attachRenderers(local, remote)
+    fun attachLocalRenderer(local: SurfaceViewRenderer) {
+        webRtcCallManager.attachLocalRenderer(local)
+    }
+
+    fun attachRemoteRenderer(remote: SurfaceViewRenderer) {
+        webRtcCallManager.attachRemoteRenderer(remote)
+    }
+
+    fun detachLocalRenderer(local: SurfaceViewRenderer?) {
+        webRtcCallManager.detachLocalRenderer(local)
+    }
+
+    fun detachRemoteRenderer(remote: SurfaceViewRenderer?) {
+        webRtcCallManager.detachRemoteRenderer(remote)
+    }
+
+    fun detachRenderers(local: SurfaceViewRenderer?, remote: SurfaceViewRenderer?) {
+        webRtcCallManager.detachRenderers(local, remote)
     }
 
     fun startWebRtcIfReady(
@@ -113,4 +129,9 @@ class CallsViewModel(
     fun toggleMute() = webRtcCallManager.toggleMute()
     fun toggleSpeaker() = webRtcCallManager.toggleSpeaker()
     fun switchCamera() = webRtcCallManager.switchCamera()
+
+    override fun onCleared() {
+        super.onCleared()
+        webRtcCallManager.endSession()
+    }
 }
