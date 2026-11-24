@@ -3,12 +3,12 @@ package com.example.contacts
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
-import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -76,6 +76,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -108,10 +109,6 @@ import com.example.ui.theme.IndigoPrimary
 import com.example.ui.theme.OnlineEmerald
 import com.example.ui.theme.SoftBlueTertiary
 import com.example.ui.theme.VioletSecondary
-import com.google.mlkit.vision.barcode.BarcodeScannerOptions
-import com.google.mlkit.vision.barcode.BarcodeScanning
-import com.google.mlkit.vision.barcode.common.Barcode
-import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.Executors
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -521,7 +518,6 @@ private fun FoundContactCard(
     }
 }
 
-@androidx.annotation.OptIn(ExperimentalGetImage::class)
 @Composable
 private fun QrScannerTabContent(
     state: AddContactUiState,
@@ -534,6 +530,8 @@ private fun QrScannerTabContent(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val latestOnQrDetected by rememberUpdatedState(onQrDetected)
+    val isScanPaused by rememberUpdatedState(state.isSearching || state.foundUser != null)
 
     var hasCameraPermission by remember {
         mutableStateOf(
@@ -570,15 +568,12 @@ private fun QrScannerTabContent(
             .padding(16.dp)
     ) {
         if (hasCameraPermission) {
-            val previewView = remember { PreviewView(context) }
-            val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
-            val barcodeScanner = remember {
-                BarcodeScanning.getClient(
-                    BarcodeScannerOptions.Builder()
-                        .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
-                        .build()
-                )
+            val previewView = remember {
+                PreviewView(context).apply {
+                    implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                }
             }
+            val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
 
             DisposableEffect(lifecycleOwner) {
                 val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
@@ -589,28 +584,23 @@ private fun QrScannerTabContent(
                     val preview = Preview.Builder().build().also {
                         it.surfaceProvider = previewView.surfaceProvider
                     }
+                    var lastAnalyzedMs = 0L
                     val analysis = ImageAnalysis.Builder()
+                        .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                         .build()
                         .also { imageAnalysis ->
                             imageAnalysis.setAnalyzer(analysisExecutor) { imageProxy ->
-                                val mediaImage = imageProxy.image
-                                if (mediaImage != null) {
-                                    val inputImage = InputImage.fromMediaImage(
-                                        mediaImage,
-                                        imageProxy.imageInfo.rotationDegrees
-                                    )
-                                    barcodeScanner.process(inputImage)
-                                        .addOnSuccessListener { barcodes ->
-                                            val raw = barcodes.firstOrNull { !it.rawValue.isNullOrBlank() }?.rawValue
-                                            if (!raw.isNullOrBlank()) {
-                                                mainExecutor.execute { onQrDetected(raw) }
-                                            }
+                                try {
+                                    val now = SystemClock.elapsedRealtime()
+                                    if (!isScanPaused && now - lastAnalyzedMs >= 150L) {
+                                        lastAnalyzedMs = now
+                                        val raw = QrCodeUtils.decodeQrFromYuvImageProxy(imageProxy)
+                                        if (!raw.isNullOrBlank()) {
+                                            mainExecutor.execute { latestOnQrDetected(raw) }
                                         }
-                                        .addOnCompleteListener {
-                                            imageProxy.close()
-                                        }
-                                } else {
+                                    }
+                                } finally {
                                     imageProxy.close()
                                 }
                             }
@@ -633,7 +623,6 @@ private fun QrScannerTabContent(
                         cameraProviderFuture.get().unbindAll()
                     } catch (_: Exception) {
                     }
-                    barcodeScanner.close()
                     analysisExecutor.shutdown()
                 }
             }

@@ -198,7 +198,7 @@ fun ActiveCallScreen(
     LaunchedEffect(session, hasPermissions, hasCameraPermission) {
         val s = session ?: return@LaunchedEffect
         if (s.statusEnum == CallStatus.ENDED || s.statusEnum == CallStatus.REJECTED || s.statusEnum == CallStatus.MISSED) {
-            viewModel.endCall(s.id)
+            viewModel.closeLocalSession()
             onCallClosed()
         } else {
             viewModel.startWebRtcIfReady(s, hasPermissions, hasCameraPermission)

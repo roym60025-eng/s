@@ -11,4 +11,9 @@
     <string name="empty_chats_title">No conversations yet</string>
     <string name="empty_chats_subtitle">Tap New Chat to discover people on Manoj &amp; Sonali and start messaging in real time.</string>
     <string name="error_generic">Something went wrong. Please try again.</string>
+    <string name="chat_room_back_cd">Navigate back</string>
+    <string name="chat_room_empty_title">No messages yet</string>
+    <string name="chat_room_empty_subtitle">Send a message below to start the conversation.</string>
+    <string name="chat_room_message_placeholder">Type a message...</string>
+    <string name="chat_room_send_cd">Send message</string>
 </resources>

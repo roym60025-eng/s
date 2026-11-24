@@ -1,5 +1,6 @@
 package com.example
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -21,13 +22,16 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         val container = (application as ManojSonaliApp).container
+        container.notificationMonitor.onNotificationIntent(intent)
 
         lifecycle.addObserver(LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_START -> {
+                    container.notificationMonitor.setAppForeground(true)
                     lifecycleScope.launch { container.authAndUserRepository.updatePresence(true) }
                 }
                 Lifecycle.Event.ON_STOP -> {
+                    container.notificationMonitor.setAppForeground(false)
                     lifecycleScope.launch { container.authAndUserRepository.updatePresence(false) }
                 }
                 else -> Unit
@@ -47,5 +51,12 @@ class MainActivity : ComponentActivity() {
                 AppNavigation(container = container)
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val container = (application as ManojSonaliApp).container
+        container.notificationMonitor.onNotificationIntent(intent)
     }
 }

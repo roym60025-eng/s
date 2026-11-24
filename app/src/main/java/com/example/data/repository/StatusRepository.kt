@@ -84,9 +84,9 @@ class StatusRepository(
             val payload = InputValidator.nonNullFields(
                 "userId" to uid,
                 "userName" to userName.take(80),
-                "userPhotoUrl" to userPhotoUrl,
+                "userPhotoUrl" to userPhotoUrl?.takeIf { it.isNotBlank() },
                 "caption" to caption?.trim()?.take(InputValidator.MAX_STATUS_CAPTION),
-                "mediaUrl" to mediaUrl,
+                "mediaUrl" to mediaUrl?.takeIf { it.isNotBlank() },
                 "type" to type.name,
                 "backgroundColorHex" to backgroundColorHex,
                 "privacy" to privacy.name,

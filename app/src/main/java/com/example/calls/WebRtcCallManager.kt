@@ -39,7 +39,7 @@ class WebRtcCallManager(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    val eglBase: EglBase = EglBase.create()
+    val eglBase: EglBase by lazy { EglBase.create() }
     private var factory: PeerConnectionFactory? = null
     private var peerConnection: PeerConnection? = null
     private var localAudioSource: AudioSource? = null
@@ -54,8 +54,13 @@ class WebRtcCallManager(
     private var remoteVideoTrack: VideoTrack? = null
 
     private val appliedRemoteCandidates = mutableSetOf<String>()
+    private var sentLocalCandidatesCount = 0
+    @Volatile
     private var isCallerRole: Boolean = false
+    @Volatile
     private var activeCallId: String? = null
+    @Volatile
+    private var isSessionEnded: Boolean = false
 
     private val _isMuted = MutableStateFlow(false)
     val isMuted: StateFlow<Boolean> = _isMuted.asStateFlow()
@@ -108,7 +113,9 @@ class WebRtcCallManager(
     ) {
         if (activeCallId == callId && peerConnection != null) return
         activeCallId = callId
+        isSessionEnded = false
         isCallerRole = isCaller
+        sentLocalCandidatesCount = 0
         appliedRemoteCandidates.clear()
         _connectionState.value = if (isCaller) "Calling..." else "Connecting..."
 
@@ -125,14 +132,19 @@ class WebRtcCallManager(
 
             peerConnection = factory?.createPeerConnection(rtcConfig, object : PeerConnection.Observer {
                 override fun onIceCandidate(candidate: IceCandidate?) {
+                    if (isSessionEnded || activeCallId != callId) return
+                    if (sentLocalCandidatesCount >= 180) return
                     val cand = candidate ?: return
+                    sentLocalCandidatesCount++
                     val serialized = JSONObject().apply {
                         put("sdpMid", cand.sdpMid)
                         put("sdpMLineIndex", cand.sdpMLineIndex)
                         put("sdp", cand.sdp)
                     }.toString()
                     scope.launch {
-                        callRepository.addIceCandidate(callId, isCallerRole, serialized)
+                        if (!isSessionEnded && activeCallId == callId) {
+                            callRepository.addIceCandidate(callId, isCallerRole, serialized)
+                        }
                     }
                 }
 
@@ -208,31 +220,39 @@ class WebRtcCallManager(
         }
         pc.createOffer(object : SimpleSdpObserver() {
             override fun onCreateSuccess(p0: SessionDescription?) {
+                if (isSessionEnded || activeCallId != callId) return
                 val desc = p0 ?: return
                 pc.setLocalDescription(SimpleSdpObserver(), desc)
                 scope.launch {
-                    callRepository.publishOfferSdp(callId, desc.description)
+                    if (!isSessionEnded && activeCallId == callId) {
+                        callRepository.publishOfferSdp(callId, desc.description)
+                    }
                 }
             }
         }, constraints)
     }
 
     fun handleRemoteOfferAndCreateAnswer(callId: String, offerSdp: String) {
+        if (isSessionEnded || activeCallId != callId) return
         val pc = peerConnection ?: return
         if (pc.remoteDescription != null) return
         val remoteDesc = SessionDescription(SessionDescription.Type.OFFER, offerSdp)
         pc.setRemoteDescription(object : SimpleSdpObserver() {
             override fun onSetSuccess() {
+                if (isSessionEnded || activeCallId != callId) return
                 val constraints = MediaConstraints().apply {
                     mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"))
                     mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"))
                 }
                 pc.createAnswer(object : SimpleSdpObserver() {
                     override fun onCreateSuccess(p0: SessionDescription?) {
+                        if (isSessionEnded || activeCallId != callId) return
                         val ans = p0 ?: return
                         pc.setLocalDescription(SimpleSdpObserver(), ans)
                         scope.launch {
-                            callRepository.acceptCallWithAnswer(callId, ans.description)
+                            if (!isSessionEnded && activeCallId == callId) {
+                                callRepository.acceptCallWithAnswer(callId, ans.description)
+                            }
                         }
                     }
                 }, constraints)
@@ -291,7 +311,9 @@ class WebRtcCallManager(
     }
 
     fun endSession() {
+        isSessionEnded = true
         activeCallId = null
+        sentLocalCandidatesCount = 0
         appliedRemoteCandidates.clear()
         try {
             videoCapturer?.stopCapture()

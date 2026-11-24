@@ -39,56 +39,88 @@ class StatusViewModel(
 
     val currentUser: StateFlow<UserProfile?> = authRepository.observeUserProfile(currentUserId)
         .catch { unwrapFirestoreError(it); emit(null) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), null)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     private val _uploadProgress = MutableStateFlow<Float?>(null)
     val uploadProgress: StateFlow<Float?> = _uploadProgress.asStateFlow()
 
+    private val _isPosting = MutableStateFlow(false)
+    val isPosting: StateFlow<Boolean> = _isPosting.asStateFlow()
+
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
+    private suspend fun resolveAuthor(): Pair<String, String?> {
+        val profile = currentUser.value ?: authRepository.getUserProfileOnce(currentUserId)
+        val fallbackName = authRepository.currentUser()?.displayName?.takeIf { it.isNotBlank() } ?: "Member"
+        val displayName = profile?.displayName?.takeIf { it.isNotBlank() } ?: fallbackName
+        val photoUrl = profile?.photoUrl?.takeIf { it.isNotBlank() }
+        return displayName to photoUrl
+    }
+
     fun postTextStatus(text: String, bgHex: String, privacy: StatusPrivacy, onDone: () -> Unit) {
-        val me = currentUser.value ?: return
-        if (text.isBlank()) return
+        if (text.isBlank()) {
+            _errorMessage.value = "Please enter some text for your story."
+            return
+        }
         viewModelScope.launch {
+            _errorMessage.value = null
+            _isPosting.value = true
+            val (authorName, authorPhoto) = resolveAuthor()
             statusRepository.postStatus(
-                userName = me.displayName.ifBlank { "Member" },
-                userPhotoUrl = me.photoUrl,
+                userName = authorName,
+                userPhotoUrl = authorPhoto,
                 type = StatusType.TEXT,
                 caption = text,
                 mediaUrl = null,
                 backgroundColorHex = bgHex,
                 privacy = privacy
             ).fold(
-                onSuccess = { onDone() },
-                onFailure = { _errorMessage.value = it.localizedMessage }
+                onSuccess = {
+                    _isPosting.value = false
+                    onDone()
+                },
+                onFailure = {
+                    _isPosting.value = false
+                    _errorMessage.value = it.localizedMessage ?: "Could not post story. Please try again."
+                }
             )
         }
     }
 
     fun postMediaStatus(uri: Uri, type: StatusType, caption: String, privacy: StatusPrivacy, onDone: () -> Unit) {
-        val me = currentUser.value ?: return
         viewModelScope.launch {
+            _errorMessage.value = null
+            _isPosting.value = true
+            _uploadProgress.value = 0.05f
+            val (authorName, authorPhoto) = resolveAuthor()
             storageRepository.uploadUri("status_media", uri).collect { prog ->
                 when (prog) {
                     is MediaUploadProgress.Uploading -> _uploadProgress.value = prog.fraction
                     is MediaUploadProgress.Completed -> {
                         _uploadProgress.value = null
                         statusRepository.postStatus(
-                            userName = me.displayName.ifBlank { "Member" },
-                            userPhotoUrl = me.photoUrl,
+                            userName = authorName,
+                            userPhotoUrl = authorPhoto,
                             type = type,
                             caption = caption,
                             mediaUrl = prog.downloadUrl,
                             backgroundColorHex = null,
                             privacy = privacy
                         ).fold(
-                            onSuccess = { onDone() },
-                            onFailure = { _errorMessage.value = it.localizedMessage }
+                            onSuccess = {
+                                _isPosting.value = false
+                                onDone()
+                            },
+                            onFailure = {
+                                _isPosting.value = false
+                                _errorMessage.value = it.localizedMessage ?: "Could not post story."
+                            }
                         )
                     }
                     is MediaUploadProgress.Failed -> {
                         _uploadProgress.value = null
+                        _isPosting.value = false
                         _errorMessage.value = prog.message
                     }
                 }

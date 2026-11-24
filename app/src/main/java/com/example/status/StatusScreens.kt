@@ -74,6 +74,12 @@ import com.example.presentation.components.UserAvatar
 import com.example.utils.DateTimeUtils
 import kotlinx.coroutines.delay
 
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalIconButton
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateStatusScreen(
@@ -81,6 +87,7 @@ fun CreateStatusScreen(
     onBack: () -> Unit
 ) {
     val uploadProgress by viewModel.uploadProgress.collectAsStateWithLifecycle()
+    val isPosting by viewModel.isPosting.collectAsStateWithLifecycle()
     val error by viewModel.errorMessage.collectAsStateWithLifecycle()
 
     var caption by remember { mutableStateOf("") }
@@ -96,6 +103,7 @@ fun CreateStatusScreen(
         if (uri != null) {
             selectedUri = uri
             mediaType = StatusType.IMAGE
+            viewModel.clearError()
         }
     }
 
@@ -105,6 +113,7 @@ fun CreateStatusScreen(
         if (uri != null) {
             selectedUri = uri
             mediaType = StatusType.VIDEO
+            viewModel.clearError()
         }
     }
 
@@ -125,12 +134,17 @@ fun CreateStatusScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .imePadding()
+                .verticalScroll(rememberScrollState())
                 .padding(20.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Column {
                 if (uploadProgress != null) {
                     LinearProgressIndicator(progress = { uploadProgress ?: 0f }, modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(10.dp))
+                } else if (isPosting) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     Spacer(modifier = Modifier.height(10.dp))
                 }
                 if (error != null) {
@@ -141,7 +155,7 @@ fun CreateStatusScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(260.dp)
+                        .height(240.dp)
                         .clip(RoundedCornerShape(24.dp))
                         .background(Color(android.graphics.Color.parseColor(bgHex))),
                     contentAlignment = Alignment.Center
@@ -164,6 +178,21 @@ fun CreateStatusScreen(
                             modifier = Modifier.padding(24.dp)
                         )
                     }
+
+                    if (selectedUri != null) {
+                        FilledTonalIconButton(
+                            onClick = {
+                                selectedUri = null
+                                mediaType = StatusType.TEXT
+                            },
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(10.dp)
+                                .testTag("clear_status_media_button")
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Remove media")
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
@@ -173,7 +202,7 @@ fun CreateStatusScreen(
                         palette.forEach { hex ->
                             Box(
                                 modifier = Modifier
-                                    .size(34.dp)
+                                    .size(44.dp)
                                     .clip(CircleShape)
                                     .background(Color(android.graphics.Color.parseColor(hex)))
                                     .border(
@@ -231,6 +260,8 @@ fun CreateStatusScreen(
                 }
             }
 
+            Spacer(modifier = Modifier.height(20.dp))
+
             Button(
                 onClick = {
                     val uri = selectedUri
@@ -240,14 +271,24 @@ fun CreateStatusScreen(
                         viewModel.postTextStatus(caption, bgHex, privacy, onBack)
                     }
                 },
-                enabled = (selectedUri != null || caption.isNotBlank()) && uploadProgress == null,
+                enabled = (selectedUri != null || caption.isNotBlank()) && !isPosting && uploadProgress == null,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(54.dp)
                     .testTag("post_status_button"),
                 shape = RoundedCornerShape(18.dp)
             ) {
-                Text("Share 24h Status")
+                if (isPosting || uploadProgress != null) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text("Sharing...")
+                } else {
+                    Text("Share 24h Status")
+                }
             }
         }
     }

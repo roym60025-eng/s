@@ -92,7 +92,11 @@ test("Chats & Messages: participant isolation, Kotlin payload alignment, and sen
   const sonaliDb = testEnv.authenticatedContext(SONALI_UID).firestore();
   const intruderDb = testEnv.authenticatedContext(INTRUDER_UID).firestore();
   const now = new Date(Date.now() - 2000);
-  const chatId = "chat_manoj_sonali";
+  const chatId = `${MANOJ_UID}_${SONALI_UID}`;
+
+  // Mirrors ChatRepository.getOrCreateChat checking deterministic chat doc before creation
+  await assertSucceeds(manojDb.collection("chats").doc(chatId).get());
+  await assertFails(intruderDb.collection("chats").doc(chatId).get());
 
   await assertSucceeds(
     manojDb.collection("chats").doc(chatId).set({
@@ -100,6 +104,10 @@ test("Chats & Messages: participant isolation, Kotlin payload alignment, and sen
       createdBy: MANOJ_UID,
       lastMessage: "",
       lastMessageType: "TEXT",
+      typingUserIds: [],
+      pinnedBy: [],
+      mutedBy: [],
+      unreadCounts: { [MANOJ_UID]: 0, [SONALI_UID]: 0 },
       createdAt: now,
       updatedAt: now,
     })
@@ -215,4 +223,72 @@ test("Contacts & PhoneLookup: owner-only saved contacts and anti-scraping get-on
   // Manoj cannot read Sonali's private saved contacts
   await assertFails(manojDb.collection("users").doc(SONALI_UID).collection("contacts").get());
 });
+
+test("Statuses & Profile Photos: text/image stories and compressed inline data-URI avatars succeed", async () => {
+  const manojDb = testEnv.authenticatedContext(MANOJ_UID).firestore();
+  const sonaliDb = testEnv.authenticatedContext(SONALI_UID).firestore();
+  const now = new Date(Date.now() - 1000);
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const sampleAvatarDataUri = "data:image/jpeg;base64," + "A".repeat(40000);
+  const sampleStoryDataUri = "data:image/jpeg;base64," + "B".repeat(180000);
+
+  // User creates profile with compressed data URI avatar
+  await assertSucceeds(
+    manojDb.collection("users").doc(MANOJ_UID).set({
+      uid: MANOJ_UID,
+      displayName: "Manoj",
+      photoUrl: sampleAvatarDataUri,
+      about: "Available",
+      online: true,
+      discoverable: true,
+      lastSeen: now,
+      createdAt: now,
+      updatedAt: now,
+    })
+  );
+
+  // Manoj posts a TEXT story
+  await assertSucceeds(
+    manojDb.collection("statuses").doc("story_text_1").set({
+      userId: MANOJ_UID,
+      userName: "Manoj",
+      userPhotoUrl: sampleAvatarDataUri,
+      caption: "Good morning!",
+      type: "TEXT",
+      backgroundColorHex: "#4B3FE2",
+      privacy: "ALL_CONTACTS",
+      viewerIds: [],
+      createdAt: now,
+      expiresAt,
+      updatedAt: now,
+    })
+  );
+
+  // Manoj posts an IMAGE story with inline compressed data URI
+  await assertSucceeds(
+    manojDb.collection("statuses").doc("story_img_1").set({
+      userId: MANOJ_UID,
+      userName: "Manoj",
+      userPhotoUrl: sampleAvatarDataUri,
+      caption: "",
+      mediaUrl: sampleStoryDataUri,
+      type: "IMAGE",
+      privacy: "ALL_CONTACTS",
+      viewerIds: [],
+      createdAt: now,
+      expiresAt,
+      updatedAt: now,
+    })
+  );
+
+  // Sonali can list ALL_CONTACTS stories and mark viewed
+  await assertSucceeds(sonaliDb.collection("statuses").where("privacy", "==", "ALL_CONTACTS").get());
+  await assertSucceeds(
+    sonaliDb.collection("statuses").doc("story_img_1").update({
+      viewerIds: [SONALI_UID],
+      updatedAt: new Date(Date.now() - 200),
+    })
+  );
+});
+
 

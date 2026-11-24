@@ -106,6 +106,10 @@ class CallsViewModel(
         }
     }
 
+    fun closeLocalSession() {
+        webRtcCallManager.endSession()
+    }
+
     fun toggleMute() = webRtcCallManager.toggleMute()
     fun toggleSpeaker() = webRtcCallManager.toggleSpeaker()
     fun switchCamera() = webRtcCallManager.switchCamera()

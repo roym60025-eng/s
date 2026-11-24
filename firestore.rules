@@ -48,7 +48,7 @@ service cloud.firestore {
              data.discoverable is bool &&
              data.createdAt is timestamp && data.createdAt <= request.time &&
              data.updatedAt is timestamp && data.updatedAt <= request.time &&
-             isValidStringOpt(data, 'photoUrl', 2000) &&
+             isValidStringOpt(data, 'photoUrl', 120000) &&
              isValidStringOpt(data, 'about', 160) &&
              (!('lastSeen' in data) || data.lastSeen == null || (data.lastSeen is timestamp && data.lastSeen <= request.time));
     }
@@ -123,18 +123,18 @@ service cloud.firestore {
       }
 
       // --- 1c. SAVED CONTACTS (Owner-only) ---
-      function isValidSavedContact(data) {
-        return data.contactUid is string && data.contactUid == contactId &&
-               data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 60 &&
-               data.addedVia in ['PHONE', 'QR', 'DIRECTORY'] &&
-               isValidStringOpt(data, 'photoUrl', 2000) &&
-               isValidStringOpt(data, 'about', 160) &&
-               isValidStringOpt(data, 'phoneNumber', 32) &&
-               data.createdAt is timestamp && data.createdAt <= request.time &&
-               data.updatedAt is timestamp && data.updatedAt <= request.time;
-      }
-
       match /contacts/{contactId} {
+        function isValidSavedContact(data) {
+          return data.contactUid is string && data.contactUid == contactId &&
+                 data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 60 &&
+                 data.addedVia in ['PHONE', 'QR', 'DIRECTORY'] &&
+                 isValidStringOpt(data, 'photoUrl', 120000) &&
+                 isValidStringOpt(data, 'about', 160) &&
+                 isValidStringOpt(data, 'phoneNumber', 32) &&
+                 data.createdAt is timestamp && data.createdAt <= request.time &&
+                 data.updatedAt is timestamp && data.updatedAt <= request.time;
+        }
+
         allow get, list: if isOwner(userId);
 
         allow create: if isOwner(userId) &&
@@ -178,7 +178,15 @@ service cloud.firestore {
     }
 
     match /chats/{chatId} {
-      allow get, list: if isSignedIn() && request.auth.uid in existing().participantIds;
+      allow get: if isSignedIn() && (
+        (resource == null && (
+          request.auth.uid in chatId.split('_') ||
+          chatId.matches('^' + request.auth.uid + '_.*') ||
+          chatId.matches('.*_' + request.auth.uid + '$')
+        )) ||
+        (resource != null && request.auth.uid in existing().participantIds)
+      );
+      allow list: if isSignedIn() && request.auth.uid in existing().participantIds;
 
       allow create: if isSignedIn() &&
                        isValidId(chatId) &&
@@ -218,7 +226,7 @@ service cloud.firestore {
                data.updatedAt is timestamp && data.updatedAt <= request.time &&
                isValidStringOpt(data, 'senderName', 80) &&
                isValidStringOpt(data, 'text', 4000) &&
-               isValidStringOpt(data, 'mediaUrl', 2000) &&
+               isValidStringOpt(data, 'mediaUrl', 450000) &&
                isValidStringOpt(data, 'mediaName', 255) &&
                (!('mediaSizeBytes' in data) || data.mediaSizeBytes == null || (data.mediaSizeBytes is int && data.mediaSizeBytes >= 0 && data.mediaSizeBytes <= 104857600)) &&
                (!('voiceDurationMs' in data) || data.voiceDurationMs == null || (data.voiceDurationMs is int && data.voiceDurationMs >= 0 && data.voiceDurationMs <= 3600000)) &&
@@ -277,7 +285,7 @@ service cloud.firestore {
              data.createdAt is timestamp && data.createdAt <= request.time &&
              data.updatedAt is timestamp && data.updatedAt <= request.time &&
              isValidStringOpt(data, 'description', 300) &&
-             isValidStringOpt(data, 'imageUrl', 2000) &&
+             isValidStringOpt(data, 'imageUrl', 120000) &&
              isValidStringOpt(data, 'lastMessage', 1000) &&
              isValidStringOpt(data, 'lastMessageSenderName', 80) &&
              (!('lastMessageTime' in data) || data.lastMessageTime == null || (data.lastMessageTime is timestamp && data.lastMessageTime <= request.time)) &&
@@ -334,7 +342,7 @@ service cloud.firestore {
                data.updatedAt is timestamp && data.updatedAt <= request.time &&
                isValidStringOpt(data, 'senderName', 80) &&
                isValidStringOpt(data, 'text', 4000) &&
-               isValidStringOpt(data, 'mediaUrl', 2000) &&
+               isValidStringOpt(data, 'mediaUrl', 450000) &&
                isValidStringOpt(data, 'mediaName', 255) &&
                (!('mediaSizeBytes' in data) || data.mediaSizeBytes == null || (data.mediaSizeBytes is int && data.mediaSizeBytes >= 0 && data.mediaSizeBytes <= 104857600)) &&
                (!('voiceDurationMs' in data) || data.voiceDurationMs == null || (data.voiceDurationMs is int && data.voiceDurationMs >= 0 && data.voiceDurationMs <= 3600000)) &&
@@ -389,9 +397,9 @@ service cloud.firestore {
              data.createdAt is timestamp && data.createdAt <= request.time &&
              data.expiresAt is timestamp &&
              data.updatedAt is timestamp && data.updatedAt <= request.time &&
-             isValidStringOpt(data, 'userPhotoUrl', 2000) &&
+             isValidStringOpt(data, 'userPhotoUrl', 120000) &&
              isValidStringOpt(data, 'caption', 500) &&
-             isValidStringOpt(data, 'mediaUrl', 2000) &&
+             isValidStringOpt(data, 'mediaUrl', 450000) &&
              isValidStringOpt(data, 'backgroundColorHex', 16) &&
              (!('viewerIds' in data) || isValidBoundedList(data.viewerIds, 200));
     }
@@ -435,13 +443,13 @@ service cloud.firestore {
              data.startedAt is timestamp && data.startedAt <= request.time &&
              data.updatedAt is timestamp && data.updatedAt <= request.time &&
              isValidStringOpt(data, 'callerName', 80) &&
-             isValidStringOpt(data, 'callerPhotoUrl', 2000) &&
+             isValidStringOpt(data, 'callerPhotoUrl', 120000) &&
              isValidStringOpt(data, 'receiverName', 80) &&
-             isValidStringOpt(data, 'receiverPhotoUrl', 2000) &&
-             isValidStringOpt(data, 'offerSdp', 20000) &&
-             isValidStringOpt(data, 'answerSdp', 20000) &&
-             (!('callerCandidates' in data) || isValidBoundedList(data.callerCandidates, 50)) &&
-             (!('receiverCandidates' in data) || isValidBoundedList(data.receiverCandidates, 50)) &&
+             isValidStringOpt(data, 'receiverPhotoUrl', 120000) &&
+             isValidStringOpt(data, 'offerSdp', 50000) &&
+             isValidStringOpt(data, 'answerSdp', 50000) &&
+             (!('callerCandidates' in data) || isValidBoundedList(data.callerCandidates, 200)) &&
+             (!('receiverCandidates' in data) || isValidBoundedList(data.receiverCandidates, 200)) &&
              (!('endedAt' in data) || data.endedAt == null || (data.endedAt is timestamp && data.endedAt <= request.time));
     }
 
@@ -489,7 +497,7 @@ service cloud.firestore {
     function isValidPhoneLookup(data) {
       return data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 &&
              data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 60 &&
-             isValidStringOpt(data, 'photoUrl', 2000) &&
+             isValidStringOpt(data, 'photoUrl', 120000) &&
              data.createdAt is timestamp && data.createdAt <= request.time &&
              data.updatedAt is timestamp && data.updatedAt <= request.time;
     }

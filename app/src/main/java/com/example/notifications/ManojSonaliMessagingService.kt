@@ -38,7 +38,8 @@ class ManojSonaliMessagingService : FirebaseMessagingService() {
         val type = message.data["type"] ?: "message"
         val title = message.notification?.title ?: message.data["title"] ?: getString(R.string.app_name)
         val body = message.notification?.body ?: message.data["body"] ?: "New activity"
-        showNotification(this, type, title, body)
+        val targetId = message.data["chatId"] ?: message.data["groupId"] ?: message.data["callId"]
+        showNotification(this, type, title, body, targetId)
     }
 
     companion object {
@@ -46,6 +47,9 @@ class ManojSonaliMessagingService : FirebaseMessagingService() {
         const val CHANNEL_GROUPS = "channel_groups"
         const val CHANNEL_CALLS = "channel_calls"
         const val CHANNEL_STATUS = "channel_status"
+
+        const val EXTRA_NAV_TYPE = "extra_nav_type"
+        const val EXTRA_NAV_ID = "extra_nav_id"
 
         fun createChannels(context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -76,7 +80,13 @@ class ManojSonaliMessagingService : FirebaseMessagingService() {
             }
         }
 
-        fun showNotification(context: Context, type: String, title: String, body: String) {
+        fun showNotification(
+            context: Context,
+            type: String,
+            title: String,
+            body: String,
+            targetId: String? = null
+        ) {
             createChannels(context)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                 ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
@@ -92,27 +102,47 @@ class ManojSonaliMessagingService : FirebaseMessagingService() {
                 else -> CHANNEL_MESSAGES
             }
 
+            val navType = when (type) {
+                "group" -> "group"
+                "call" -> "call"
+                else -> if (targetId != null) "chat" else null
+            }
+
+            val notificationId = "${type}:${targetId ?: title}".hashCode()
+
             val intent = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                if (navType != null && targetId != null) {
+                    putExtra(EXTRA_NAV_TYPE, navType)
+                    putExtra(EXTRA_NAV_ID, targetId)
+                }
             }
             val pendingIntent = PendingIntent.getActivity(
                 context,
-                type.hashCode(),
+                notificationId,
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
+            val category = if (type == "call") {
+                NotificationCompat.CATEGORY_CALL
+            } else {
+                NotificationCompat.CATEGORY_MESSAGE
+            }
+
             val notification = NotificationCompat.Builder(context, channelId)
-                .setSmallIcon(R.mipmap.ic_launcher_round)
+                .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle(title)
                 .setContentText(body)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                .setCategory(category)
+                .setDefaults(NotificationCompat.DEFAULT_ALL)
                 .setAutoCancel(true)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setContentIntent(pendingIntent)
                 .build()
 
-            NotificationManagerCompat.from(context)
-                .notify((System.currentTimeMillis() % 100000).toInt(), notification)
+            NotificationManagerCompat.from(context).notify(notificationId, notification)
         }
     }
 }

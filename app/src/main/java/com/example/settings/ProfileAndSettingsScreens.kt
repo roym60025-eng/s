@@ -68,6 +68,10 @@ import com.example.presentation.components.EmptyIllustrationState
 import com.example.presentation.components.UserAvatar
 import com.example.profile.ProfileSettingsViewModel
 
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.FilledTonalIconButton
+import com.example.presentation.components.ErrorBannerCard
+
 @Composable
 fun ProfileTabContent(
     viewModel: ProfileSettingsViewModel,
@@ -80,6 +84,8 @@ fun ProfileTabContent(
     val profile by viewModel.userProfile.collectAsStateWithLifecycle()
     val settings by viewModel.privateSettings.collectAsStateWithLifecycle()
     val uploadProgress by viewModel.uploadProgress.collectAsStateWithLifecycle()
+    val statusMessage by viewModel.statusMessage.collectAsStateWithLifecycle()
+    val isErrorStatus by viewModel.isErrorStatus.collectAsStateWithLifecycle()
 
     val photoPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
@@ -97,23 +103,77 @@ fun ProfileTabContent(
             Spacer(modifier = Modifier.height(10.dp))
         }
 
-        Box(contentAlignment = Alignment.BottomEnd) {
+        if (statusMessage != null) {
+            if (isErrorStatus) {
+                ErrorBannerCard(
+                    message = statusMessage.orEmpty(),
+                    onRetry = viewModel::clearStatusMessage
+                )
+            } else {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = statusMessage.orEmpty(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = viewModel::clearStatusMessage) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Dismiss",
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        Box(
+            contentAlignment = Alignment.BottomEnd,
+            modifier = Modifier
+                .clickable(enabled = uploadProgress == null) {
+                    photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }
+                .testTag("profile_avatar_container")
+        ) {
             UserAvatar(
                 name = profile?.displayName ?: "Member",
                 photoUrl = profile?.photoUrl,
                 size = 104.dp,
                 isOnline = true
             )
-            IconButton(
+            FilledTonalIconButton(
                 onClick = {
                     photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                }
+                },
+                enabled = uploadProgress == null,
+                modifier = Modifier.testTag("change_profile_photo_button")
             ) {
                 Icon(Icons.Default.AddAPhoto, contentDescription = "Change avatar")
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(6.dp))
+        TextButton(
+            onClick = {
+                photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            },
+            enabled = uploadProgress == null
+        ) {
+            Text(if (uploadProgress != null) "Updating photo..." else "Change profile photo")
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = profile?.displayName ?: "Manoj & Sonali User",
             style = MaterialTheme.typography.headlineMedium
@@ -210,9 +270,17 @@ fun EditProfileScreen(
 ) {
     val profile by viewModel.userProfile.collectAsStateWithLifecycle()
     val settings by viewModel.privateSettings.collectAsStateWithLifecycle()
+    val uploadProgress by viewModel.uploadProgress.collectAsStateWithLifecycle()
+    val statusMessage by viewModel.statusMessage.collectAsStateWithLifecycle()
+    val isErrorStatus by viewModel.isErrorStatus.collectAsStateWithLifecycle()
+
     var name by remember(profile) { mutableStateOf(profile?.displayName.orEmpty()) }
     var about by remember(profile) { mutableStateOf(profile?.about.orEmpty()) }
     var phone by remember(settings) { mutableStateOf(settings?.phoneNumber.orEmpty()) }
+
+    val photoPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri -> if (uri != null) viewModel.uploadNewAvatar(uri) }
 
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
@@ -231,9 +299,42 @@ fun EditProfileScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
                 .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            if (uploadProgress != null) {
+                LinearProgressIndicator(progress = { uploadProgress ?: 0f }, modifier = Modifier.fillMaxWidth())
+            }
+            if (statusMessage != null && isErrorStatus) {
+                ErrorBannerCard(
+                    message = statusMessage.orEmpty(),
+                    onRetry = viewModel::clearStatusMessage
+                )
+            }
+
+            Box(
+                contentAlignment = Alignment.BottomEnd,
+                modifier = Modifier.clickable(enabled = uploadProgress == null) {
+                    photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }
+            ) {
+                UserAvatar(
+                    name = name.ifBlank { profile?.displayName ?: "Member" },
+                    photoUrl = profile?.photoUrl,
+                    size = 96.dp
+                )
+                FilledTonalIconButton(
+                    onClick = {
+                        photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    },
+                    enabled = uploadProgress == null
+                ) {
+                    Icon(Icons.Default.AddAPhoto, contentDescription = "Change profile photo")
+                }
+            }
+
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
@@ -255,10 +356,10 @@ fun EditProfileScreen(
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth()
             )
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.height(8.dp))
             Button(
                 onClick = { viewModel.saveProfileEdits(name, about, phone, onBack) },
-                enabled = name.isNotBlank(),
+                enabled = name.isNotBlank() && uploadProgress == null,
                 modifier = Modifier.fillMaxWidth().height(54.dp),
                 shape = RoundedCornerShape(18.dp)
             ) {

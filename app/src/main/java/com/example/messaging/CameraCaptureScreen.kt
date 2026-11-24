@@ -51,7 +51,11 @@ fun CameraCaptureScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     var lensFacing by remember { mutableIntStateOf(CameraSelector.LENS_FACING_BACK) }
     val imageCapture = remember { ImageCapture.Builder().build() }
-    val previewView = remember { PreviewView(context) }
+    val previewView = remember {
+        PreviewView(context).apply {
+            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+        }
+    }
 
     DisposableEffect(lensFacing) {
         val future = ProcessCameraProvider.getInstance(context)

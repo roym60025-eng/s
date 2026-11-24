@@ -114,6 +114,7 @@ class ChatRepository(
 
     suspend fun getOrCreateChat(peerUid: String): Result<String> {
         var path = "chats"
+        var operation = OperationType.GET
         return try {
             val uid = requireUserId()
             require(peerUid.isNotBlank() && peerUid != uid) { "Invalid chat recipient." }
@@ -122,6 +123,7 @@ class ChatRepository(
             path = ref.path
             val snap = ref.get().await()
             if (!snap.exists()) {
+                operation = OperationType.CREATE
                 val payload = mapOf(
                     "participantIds" to listOf(uid, peerUid).sorted(),
                     "createdBy" to uid,
@@ -134,13 +136,20 @@ class ChatRepository(
                     "createdAt" to FieldValue.serverTimestamp(),
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
-                ref.set(payload).await()
+                try {
+                    ref.set(payload).await()
+                } catch (createErr: FirebaseFirestoreException) {
+                    val racedDoc = runCatching { ref.get().await() }.getOrNull()
+                    if (racedDoc == null || !racedDoc.exists()) {
+                        throw createErr
+                    }
+                }
             }
             Result.success(chatId)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.WRITE, path)
+            handleFirestoreError(e, operation, path)
             Result.failure(e)
         }
     }

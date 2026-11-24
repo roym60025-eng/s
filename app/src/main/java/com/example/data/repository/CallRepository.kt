@@ -91,11 +91,11 @@ class CallRepository(
             path = ref.path
             val payload = InputValidator.nonNullFields(
                 "callerId" to uid,
-                "callerName" to callerName.take(80),
-                "callerPhotoUrl" to callerPhotoUrl,
+                "callerName" to callerName.ifBlank { "Member" }.take(80),
+                "callerPhotoUrl" to callerPhotoUrl?.takeIf { it.isNotBlank() },
                 "receiverId" to receiverId,
-                "receiverName" to receiverName.take(80),
-                "receiverPhotoUrl" to receiverPhotoUrl,
+                "receiverName" to receiverName.ifBlank { "Member" }.take(80),
+                "receiverPhotoUrl" to receiverPhotoUrl?.takeIf { it.isNotBlank() },
                 "participantIds" to listOf(uid, receiverId),
                 "callType" to callType.name,
                 "status" to CallStatus.RINGING.name,
@@ -115,31 +115,37 @@ class CallRepository(
     }
 
     suspend fun publishOfferSdp(callId: String, offerSdp: String): Result<Unit> =
-        updateCall(callId, mapOf("offerSdp" to offerSdp.take(20000)))
+        updateCall(callId, mapOf("offerSdp" to offerSdp.take(50000)), ignoreIfTerminal = true)
 
     suspend fun acceptCallWithAnswer(callId: String, answerSdp: String): Result<Unit> =
         updateCall(
             callId,
             mapOf(
                 "status" to CallStatus.ACCEPTED.name,
-                "answerSdp" to answerSdp.take(20000)
-            )
+                "answerSdp" to answerSdp.take(50000)
+            ),
+            ignoreIfTerminal = true
         )
 
     suspend fun addIceCandidate(callId: String, isCaller: Boolean, candidateSerialized: String): Result<Unit> {
         val field = if (isCaller) "callerCandidates" else "receiverCandidates"
-        return updateCall(callId, mapOf(field to FieldValue.arrayUnion(candidateSerialized)))
+        return updateCall(callId, mapOf(field to FieldValue.arrayUnion(candidateSerialized)), ignoreIfTerminal = true)
     }
 
     suspend fun updateCallStatus(callId: String, status: CallStatus): Result<Unit> {
+        val isTargetTerminal = status == CallStatus.ENDED || status == CallStatus.REJECTED || status == CallStatus.MISSED
         val updates = mutableMapOf<String, Any>("status" to status.name)
-        if (status == CallStatus.ENDED || status == CallStatus.REJECTED || status == CallStatus.MISSED) {
+        if (isTargetTerminal) {
             updates["endedAt"] = FieldValue.serverTimestamp()
         }
-        return updateCall(callId, updates)
+        return updateCall(callId, updates, ignoreIfTerminal = isTargetTerminal)
     }
 
-    private suspend fun updateCall(callId: String, fields: Map<String, Any>): Result<Unit> {
+    private suspend fun updateCall(
+        callId: String,
+        fields: Map<String, Any>,
+        ignoreIfTerminal: Boolean = false
+    ): Result<Unit> {
         val path = "calls/$callId"
         return try {
             requireUserId()
@@ -151,6 +157,17 @@ class CallRepository(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            if (ignoreIfTerminal && e is FirebaseFirestoreException && e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                val existingStatus = runCatching {
+                    db.document(path).get().await().getString("status")
+                }.getOrNull()
+                if (existingStatus == CallStatus.ENDED.name ||
+                    existingStatus == CallStatus.REJECTED.name ||
+                    existingStatus == CallStatus.MISSED.name
+                ) {
+                    return Result.success(Unit)
+                }
+            }
             handleFirestoreError(e, OperationType.UPDATE, path)
             Result.failure(e)
         }

@@ -10,6 +10,7 @@ import com.example.data.repository.CallRepository
 import com.example.data.repository.ChatRepository
 import com.example.data.repository.GroupRepository
 import com.example.data.repository.StatusRepository
+import com.example.notifications.IncomingNotificationMonitor
 import com.example.security.KeystoreManager
 import com.example.utils.VoiceRecorderPlayer
 import com.google.firebase.Firebase
@@ -32,4 +33,12 @@ class AppContainer(appContext: Context) {
     val statusRepository = StatusRepository(firestore, auth)
     val callRepository = CallRepository(firestore, auth)
     val webRtcCallManager = WebRtcCallManager(appContext, callRepository)
+    val notificationMonitor = IncomingNotificationMonitor(
+        appContext = appContext,
+        authRepository = authAndUserRepository,
+        chatRepository = chatRepository,
+        groupRepository = groupRepository,
+        callRepository = callRepository,
+        preferencesDataStore = preferencesDataStore
+    )
 }

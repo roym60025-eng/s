@@ -122,7 +122,7 @@ dependencies {
   implementation(libs.googleid)
   implementation(libs.androidx.work.runtime.ktx)
   implementation(libs.stream.webrtc.android)
-  implementation(libs.mlkit.barcode.scanning)
+  // implementation(libs.mlkit.barcode.scanning)
   implementation(libs.androidx.graphics.path)
   implementation(libs.zxing.core)
   // implementation(libs.firebase.appcheck.recaptcha)

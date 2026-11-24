@@ -8,12 +8,14 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -93,6 +95,7 @@ fun AppNavigation(container: AppContainer) {
     LaunchedEffect(Unit) {
         if (!silentAttempted) {
             silentAttempted = true
+            withFrameNanos {}
             container.authAndUserRepository.attemptSilentGoogleSignIn(context)
         }
     }
@@ -188,6 +191,30 @@ private fun AuthenticatedShell(
     }
 
     val navController = rememberNavController()
+
+    DisposableEffect(currentUserId) {
+        container.notificationMonitor.start(currentUserId)
+        onDispose {
+            container.notificationMonitor.stop()
+        }
+    }
+
+    val pendingNavTarget by container.notificationMonitor.pendingNavTarget.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingNavTarget) {
+        val target = pendingNavTarget ?: return@LaunchedEffect
+        when (target.type) {
+            "chat" -> navController.navigate(Routes.chatDetail(target.targetId)) {
+                launchSingleTop = true
+            }
+            "group" -> navController.navigate(Routes.groupChat(target.targetId)) {
+                launchSingleTop = true
+            }
+            "call" -> navController.navigate(Routes.activeCall(target.targetId)) {
+                launchSingleTop = true
+            }
+        }
+        container.notificationMonitor.consumePendingNavTarget()
+    }
 
     val homeViewModel: HomeViewModel = viewModel(
         key = "home_$currentUserId",

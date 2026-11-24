@@ -29,11 +29,11 @@ class ProfileSettingsViewModel(
 
     val userProfile: StateFlow<UserProfile?> = authRepository.observeUserProfile(currentUserId)
         .catch { unwrapFirestoreError(it); emit(null) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), null)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     val privateSettings: StateFlow<UserPrivateSettings?> = authRepository.observePrivateSettings(currentUserId)
         .catch { unwrapFirestoreError(it); emit(null) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), null)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     val allUsers: StateFlow<List<UserProfile>> = authRepository.observeDiscoverableUsers()
         .catch { unwrapFirestoreError(it); emit(emptyList()) }
@@ -47,6 +47,9 @@ class ProfileSettingsViewModel(
 
     private val _statusMessage = MutableStateFlow<String?>(null)
     val statusMessage: StateFlow<String?> = _statusMessage.asStateFlow()
+
+    private val _isErrorStatus = MutableStateFlow(false)
+    val isErrorStatus: StateFlow<Boolean> = _isErrorStatus.asStateFlow()
 
     fun setThemeMode(mode: ThemeMode) {
         viewModelScope.launch {
@@ -75,24 +78,39 @@ class ProfileSettingsViewModel(
 
     fun uploadNewAvatar(uri: Uri) {
         viewModelScope.launch {
+            _statusMessage.value = null
+            _isErrorStatus.value = false
+            _uploadProgress.value = 0.05f
             storageRepository.uploadUri("avatars", uri, isAvatar = true).collect { prog ->
                 when (prog) {
                     is MediaUploadProgress.Uploading -> _uploadProgress.value = prog.fraction
                     is MediaUploadProgress.Completed -> {
-                        _uploadProgress.value = null
-                        val current = userProfile.value
+                        val current = userProfile.value ?: authRepository.getUserProfileOnce(currentUserId)
                         val settings = privateSettings.value
-                        authRepository.createOrUpdateProfile(
-                            displayName = current?.displayName ?: "Member",
+                        val fallbackName = authRepository.currentUser()?.displayName?.takeIf { it.isNotBlank() } ?: "Member"
+                        val saveResult = authRepository.createOrUpdateProfile(
+                            displayName = current?.displayName?.takeIf { it.isNotBlank() } ?: fallbackName,
                             about = current?.about ?: "",
                             photoUrl = prog.downloadUrl,
                             phoneNumber = settings?.phoneNumber,
-                            countryCode = settings?.countryCode ?: "+91"
+                            countryCode = settings?.countryCode ?: "+91",
+                            discoverable = current?.discoverable ?: true
                         )
-                        _statusMessage.value = "Profile photo updated"
+                        _uploadProgress.value = null
+                        saveResult.fold(
+                            onSuccess = {
+                                _isErrorStatus.value = false
+                                _statusMessage.value = "Profile photo updated"
+                            },
+                            onFailure = { err ->
+                                _isErrorStatus.value = true
+                                _statusMessage.value = err.localizedMessage ?: "Could not save profile photo."
+                            }
+                        )
                     }
                     is MediaUploadProgress.Failed -> {
                         _uploadProgress.value = null
+                        _isErrorStatus.value = true
                         _statusMessage.value = prog.message
                     }
                 }
@@ -101,21 +119,28 @@ class ProfileSettingsViewModel(
     }
 
     fun saveProfileEdits(displayName: String, about: String, phone: String, onDone: () -> Unit) {
-        val current = userProfile.value
-        val settings = privateSettings.value
         viewModelScope.launch {
+            _statusMessage.value = null
+            _isErrorStatus.value = false
+            val current = userProfile.value ?: authRepository.getUserProfileOnce(currentUserId)
+            val settings = privateSettings.value
             authRepository.createOrUpdateProfile(
                 displayName = displayName,
                 about = about,
                 photoUrl = current?.photoUrl,
                 phoneNumber = phone.ifBlank { settings?.phoneNumber },
-                countryCode = settings?.countryCode ?: "+91"
+                countryCode = settings?.countryCode ?: "+91",
+                discoverable = current?.discoverable ?: true
             ).fold(
                 onSuccess = {
+                    _isErrorStatus.value = false
                     _statusMessage.value = "Profile saved"
                     onDone()
                 },
-                onFailure = { _statusMessage.value = it.localizedMessage }
+                onFailure = {
+                    _isErrorStatus.value = true
+                    _statusMessage.value = it.localizedMessage ?: "Could not save profile changes."
+                }
             )
         }
     }
@@ -130,6 +155,7 @@ class ProfileSettingsViewModel(
         viewModelScope.launch {
             preferencesDataStore.clearSensitivePrefs()
             authRepository.deleteAccount(context).onFailure {
+                _isErrorStatus.value = true
                 _statusMessage.value = it.localizedMessage ?: "Recent sign-in required to delete account."
             }
         }
@@ -137,5 +163,6 @@ class ProfileSettingsViewModel(
 
     fun clearStatusMessage() {
         _statusMessage.value = null
+        _isErrorStatus.value = false
     }
 }
