@@ -84,16 +84,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.material.icons.filled.BrightnessAuto
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material3.ModalBottomSheet
+import com.example.domain.model.AppThemeStyle
 import com.example.domain.model.ThemeMode
 import com.example.presentation.components.EmptyIllustrationState
 import com.example.presentation.components.ErrorBannerCard
 import com.example.presentation.components.UserAvatar
 import com.example.profile.ProfileSettingsViewModel
-import com.example.ui.theme.BrandGreen
-import com.example.ui.theme.EmeraldButton
-import com.example.ui.theme.ForestGreenDarkHeader
-import com.example.ui.theme.ForestGreenHeader
+import com.example.ui.theme.AppThemeTokens
+import com.example.ui.theme.themePaletteFor
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     viewModel: ProfileSettingsViewModel,
@@ -107,18 +115,21 @@ fun ProfileScreen(
     val context = LocalContext.current
     val profile by viewModel.userProfile.collectAsStateWithLifecycle()
     val settings by viewModel.privateSettings.collectAsStateWithLifecycle()
+    val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    val appThemeStyle by viewModel.appThemeStyle.collectAsStateWithLifecycle()
     val uploadProgress by viewModel.uploadProgress.collectAsStateWithLifecycle()
     val statusMessage by viewModel.statusMessage.collectAsStateWithLifecycle()
     val isErrorStatus by viewModel.isErrorStatus.collectAsStateWithLifecycle()
 
     var showMenu by remember { mutableStateOf(false) }
+    var showThemeSheet by remember { mutableStateOf(false) }
 
     val photoPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
     ) { uri -> if (uri != null) viewModel.uploadNewAvatar(uri) }
 
-    val isDark = isSystemInDarkTheme()
-    val headerColor = if (isDark) ForestGreenDarkHeader else ForestGreenHeader
+    val palette = AppThemeTokens.current
+    val headerColor = palette.headerColor
 
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing
@@ -235,7 +246,7 @@ fun ProfileScreen(
             if (uploadProgress != null) {
                 LinearProgressIndicator(
                     progress = { uploadProgress ?: 0f },
-                    color = BrandGreen,
+                    color = palette.accentColor,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 6.dp)
                 )
             }
@@ -284,7 +295,7 @@ fun ProfileScreen(
             Text(
                 text = "Online",
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = BrandGreen
+                color = palette.accentColor
             )
             val contactLine = settings?.phoneNumber ?: settings?.email
             if (!contactLine.isNullOrBlank()) {
@@ -319,7 +330,7 @@ fun ProfileScreen(
                     Icon(
                         imageVector = Icons.Default.Edit,
                         contentDescription = "Edit profile",
-                        tint = BrandGreen,
+                        tint = palette.accentColor,
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -362,8 +373,16 @@ fun ProfileScreen(
                 onClick = onOpenBlocked
             )
             ProfileMenuRow(
+                icon = Icons.Default.Palette,
+                title = "Theme & Appearance",
+                trailingText = appThemeStyle.displayName,
+                trailingColorBadge = palette.accentColor,
+                onClick = { showThemeSheet = true },
+                modifier = Modifier.testTag("profile_theme_button")
+            )
+            ProfileMenuRow(
                 icon = Icons.Default.Settings,
-                title = "Theme & Preferences",
+                title = "App Settings",
                 onClick = onOpenSettings
             )
             ProfileMenuRow(
@@ -378,6 +397,40 @@ fun ProfileScreen(
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
+
+    if (showThemeSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showThemeSheet = false }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 24.dp)
+            ) {
+                ThemeStudioSection(
+                    selectedStyle = appThemeStyle,
+                    selectedMode = themeMode,
+                    onSelectStyle = viewModel::setAppThemeStyle,
+                    onSelectMode = viewModel::setThemeMode
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = {
+                        showThemeSheet = false
+                        onOpenSettings()
+                    },
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                ) {
+                    Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("More Privacy & Notification Settings")
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -385,6 +438,7 @@ private fun ProfileMenuRow(
     icon: ImageVector,
     title: String,
     trailingText: String? = null,
+    trailingColorBadge: Color? = null,
     iconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     titleColor: Color = MaterialTheme.colorScheme.onSurface,
     onClick: () -> Unit,
@@ -411,11 +465,22 @@ private fun ProfileMenuRow(
             modifier = Modifier.weight(1f)
         )
         if (!trailingText.isNullOrBlank()) {
-            Text(
-                text = trailingText,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (trailingColorBadge != null) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(trailingColorBadge)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
+                Text(
+                    text = trailingText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
@@ -436,8 +501,8 @@ fun EditProfileScreen(
     var about by remember(profile) { mutableStateOf(profile?.about.orEmpty()) }
     var phone by remember(settings) { mutableStateOf(settings?.phoneNumber.orEmpty()) }
 
-    val isDark = isSystemInDarkTheme()
-    val headerColor = if (isDark) ForestGreenDarkHeader else ForestGreenHeader
+    val palette = AppThemeTokens.current
+    val headerColor = palette.headerColor
 
     val photoPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
@@ -471,7 +536,7 @@ fun EditProfileScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (uploadProgress != null) {
-                LinearProgressIndicator(progress = { uploadProgress ?: 0f }, color = BrandGreen, modifier = Modifier.fillMaxWidth())
+                LinearProgressIndicator(progress = { uploadProgress ?: 0f }, color = palette.accentColor, modifier = Modifier.fillMaxWidth())
             }
             if (statusMessage != null && isErrorStatus) {
                 ErrorBannerCard(
@@ -528,7 +593,7 @@ fun EditProfileScreen(
                 enabled = name.isNotBlank() && uploadProgress == null,
                 modifier = Modifier.fillMaxWidth().height(54.dp),
                 shape = RoundedCornerShape(28.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = EmeraldButton)
+                colors = ButtonDefaults.buttonColors(containerColor = palette.buttonColor)
             ) {
                 Text("Save Changes")
             }
@@ -546,10 +611,11 @@ fun SettingsScreen(
     val context = LocalContext.current
     val settings by viewModel.privateSettings.collectAsStateWithLifecycle()
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    val appThemeStyle by viewModel.appThemeStyle.collectAsStateWithLifecycle()
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
-    val isDark = isSystemInDarkTheme()
-    val headerColor = if (isDark) ForestGreenDarkHeader else ForestGreenHeader
+    val palette = AppThemeTokens.current
+    val headerColor = palette.headerColor
 
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
@@ -565,40 +631,41 @@ fun SettingsScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                title = { Text("Settings") }
+                title = { Text("Themes & Settings") }
             )
         }
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(innerPadding),
-            contentPadding = PaddingValues(20.dp),
+            contentPadding = PaddingValues(vertical = 18.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item {
-                Text("Appearance", style = MaterialTheme.typography.titleMedium, color = BrandGreen)
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ThemeMode.entries.forEach { mode ->
-                        FilterChip(
-                            selected = themeMode == mode,
-                            onClick = { viewModel.setThemeMode(mode) },
-                            label = { Text(mode.name.lowercase().replaceFirstChar { it.uppercase() }) }
-                        )
-                    }
-                }
+                ThemeStudioSection(
+                    selectedStyle = appThemeStyle,
+                    selectedMode = themeMode,
+                    onSelectStyle = viewModel::setAppThemeStyle,
+                    onSelectMode = viewModel::setThemeMode
+                )
             }
 
-            item { HorizontalDivider() }
+            item { HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp)) }
 
             item {
-                Text("Privacy", style = MaterialTheme.typography.titleMedium, color = BrandGreen)
+                Text(
+                    text = "Privacy",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = palette.accentColor,
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                )
             }
             item {
                 SettingToggleRow(
                     title = "Last Seen Visibility",
                     subtitle = "Allow contacts to see when you were last active",
                     checked = settings?.lastSeenVisible ?: true,
-                    onCheckedChange = { viewModel.updateSettingToggle("lastSeenVisible", it) }
+                    onCheckedChange = { viewModel.updateSettingToggle("lastSeenVisible", it) },
+                    modifier = Modifier.padding(horizontal = 20.dp)
                 )
             }
             item {
@@ -606,7 +673,8 @@ fun SettingsScreen(
                     title = "Online Status Visibility",
                     subtitle = "Show real-time online indicator",
                     checked = settings?.onlineVisible ?: true,
-                    onCheckedChange = { viewModel.updateSettingToggle("onlineVisible", it) }
+                    onCheckedChange = { viewModel.updateSettingToggle("onlineVisible", it) },
+                    modifier = Modifier.padding(horizontal = 20.dp)
                 )
             }
             item {
@@ -614,7 +682,8 @@ fun SettingsScreen(
                     title = "Read Receipts",
                     subtitle = "Send and receive blue read checkmarks",
                     checked = settings?.readReceiptsEnabled ?: true,
-                    onCheckedChange = { viewModel.updateSettingToggle("readReceiptsEnabled", it) }
+                    onCheckedChange = { viewModel.updateSettingToggle("readReceiptsEnabled", it) },
+                    modifier = Modifier.padding(horizontal = 20.dp)
                 )
             }
             item {
@@ -622,7 +691,7 @@ fun SettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable(onClick = onOpenBlocked)
-                        .padding(vertical = 8.dp),
+                        .padding(horizontal = 20.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(Icons.Default.Block, contentDescription = null)
@@ -638,17 +707,23 @@ fun SettingsScreen(
                 }
             }
 
-            item { HorizontalDivider() }
+            item { HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp)) }
 
             item {
-                Text("Notifications", style = MaterialTheme.typography.titleMedium, color = BrandGreen)
+                Text(
+                    text = "Notifications",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = palette.accentColor,
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                )
             }
             item {
                 SettingToggleRow(
                     title = "Message Notifications",
                     subtitle = "Direct 1-to-1 chat alerts",
                     checked = settings?.notifyMessages ?: true,
-                    onCheckedChange = { viewModel.updateSettingToggle("notifyMessages", it) }
+                    onCheckedChange = { viewModel.updateSettingToggle("notifyMessages", it) },
+                    modifier = Modifier.padding(horizontal = 20.dp)
                 )
             }
             item {
@@ -656,7 +731,8 @@ fun SettingsScreen(
                     title = "Group Notifications",
                     subtitle = "Group messages and mentions",
                     checked = settings?.notifyGroups ?: true,
-                    onCheckedChange = { viewModel.updateSettingToggle("notifyGroups", it) }
+                    onCheckedChange = { viewModel.updateSettingToggle("notifyGroups", it) },
+                    modifier = Modifier.padding(horizontal = 20.dp)
                 )
             }
             item {
@@ -664,7 +740,8 @@ fun SettingsScreen(
                     title = "Call Notifications",
                     subtitle = "Incoming voice & video ring alerts",
                     checked = settings?.notifyCalls ?: true,
-                    onCheckedChange = { viewModel.updateSettingToggle("notifyCalls", it) }
+                    onCheckedChange = { viewModel.updateSettingToggle("notifyCalls", it) },
+                    modifier = Modifier.padding(horizontal = 20.dp)
                 )
             }
             item {
@@ -672,30 +749,33 @@ fun SettingsScreen(
                     title = "Status Updates",
                     subtitle = "24-hour status alerts",
                     checked = settings?.notifyStatus ?: true,
-                    onCheckedChange = { viewModel.updateSettingToggle("notifyStatus", it) }
+                    onCheckedChange = { viewModel.updateSettingToggle("notifyStatus", it) },
+                    modifier = Modifier.padding(horizontal = 20.dp)
                 )
             }
 
-            item { HorizontalDivider() }
+            item { HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp)) }
 
             item {
-                OutlinedButton(
-                    onClick = { viewModel.signOut(context) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Log Out")
-                }
-                Spacer(modifier = Modifier.height(10.dp))
-                Button(
-                    onClick = { showDeleteConfirm = true },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                    modifier = Modifier.fillMaxWidth().testTag("delete_account_button")
-                ) {
-                    Icon(Icons.Default.DeleteForever, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Delete Account")
+                Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                    OutlinedButton(
+                        onClick = { viewModel.signOut(context) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Log Out")
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Button(
+                        onClick = { showDeleteConfirm = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        modifier = Modifier.fillMaxWidth().testTag("delete_account_button")
+                    ) {
+                        Icon(Icons.Default.DeleteForever, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Delete Account")
+                    }
                 }
             }
         }
@@ -733,8 +813,8 @@ fun BlockedContactsScreen(
     val blockedIds = settings?.blockedUserIds.orEmpty()
     val usersMap = remember(allUsers) { allUsers.associateBy { it.uid } }
 
-    val isDark = isSystemInDarkTheme()
-    val headerColor = if (isDark) ForestGreenDarkHeader else ForestGreenHeader
+    val palette = AppThemeTokens.current
+    val headerColor = palette.headerColor
 
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
@@ -786,14 +866,207 @@ fun BlockedContactsScreen(
 }
 
 @Composable
+private fun ThemeStudioSection(
+    selectedStyle: AppThemeStyle,
+    selectedMode: ThemeMode,
+    onSelectStyle: (AppThemeStyle) -> Unit,
+    onSelectMode: (ThemeMode) -> Unit
+) {
+    val activePalette = AppThemeTokens.current
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text(
+                    text = "Theme Studio",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = activePalette.accentColor
+                )
+                Text(
+                    text = "Choose a color theme and Light or Dark mode",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ThemeMode.entries.forEach { mode ->
+                val selected = selectedMode == mode
+                val icon = when (mode) {
+                    ThemeMode.SYSTEM -> Icons.Default.BrightnessAuto
+                    ThemeMode.LIGHT -> Icons.Default.LightMode
+                    ThemeMode.DARK -> Icons.Default.DarkMode
+                }
+                FilterChip(
+                    selected = selected,
+                    onClick = { onSelectMode(mode) },
+                    leadingIcon = {
+                        Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
+                    },
+                    label = { Text(mode.name.lowercase().replaceFirstChar { it.uppercase() }) },
+                    modifier = Modifier.testTag("theme_mode_${mode.name.lowercase()}")
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(AppThemeStyle.entries, key = { it.name }) { style ->
+                val isSelected = selectedStyle == style
+                val preview = themePaletteFor(style, darkTheme = activePalette.isDark)
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    border = BorderStroke(
+                        width = if (isSelected) 2.5.dp else 1.dp,
+                        color = if (isSelected) preview.accentColor else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                    ),
+                    tonalElevation = if (isSelected) 4.dp else 1.dp,
+                    modifier = Modifier
+                        .width(136.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .clickable { onSelectStyle(style) }
+                        .testTag("theme_card_${style.name.lowercase()}")
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        // Mini-phone chat preview inside theme card
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(112.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(preview.chatWallpaperColor)
+                                .border(
+                                    0.5.dp,
+                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.25f),
+                                    RoundedCornerShape(14.dp)
+                                )
+                        ) {
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                // Mini Header
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(24.dp)
+                                        .background(preview.headerColor)
+                                        .padding(horizontal = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .width(44.dp)
+                                            .height(6.dp)
+                                            .clip(RoundedCornerShape(3.dp))
+                                            .background(Color.White.copy(alpha = 0.85f))
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White.copy(alpha = 0.8f))
+                                    )
+                                }
+
+                                // Mini Incoming & Outgoing Chat Bubbles
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = preview.incomingBubbleColor,
+                                        shadowElevation = 0.5.dp,
+                                        modifier = Modifier.width(68.dp).height(18.dp)
+                                    ) {}
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = preview.outgoingBubbleColor,
+                                        shadowElevation = 0.5.dp,
+                                        modifier = Modifier
+                                            .align(Alignment.End)
+                                            .width(74.dp)
+                                            .height(20.dp)
+                                    ) {}
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = preview.incomingBubbleColor,
+                                        shadowElevation = 0.5.dp,
+                                        modifier = Modifier.width(52.dp).height(16.dp)
+                                    ) {}
+                                }
+                            }
+
+                            // Mini FAB & Selected Badge
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(6.dp)
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(preview.accentColor),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = "Selected",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = style.displayName,
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            maxLines = 1
+                        )
+                        Text(
+                            text = style.subtitle,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun SettingToggleRow(
     title: String,
     subtitle: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {

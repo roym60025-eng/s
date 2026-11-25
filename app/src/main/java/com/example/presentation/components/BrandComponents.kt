@@ -58,13 +58,9 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.R
 import com.example.domain.model.DeliveryStatus
+import com.example.ui.theme.AppThemeTokens
 import com.example.ui.theme.BrandGreen
-import com.example.ui.theme.BrandGreenLight
 import com.example.ui.theme.BrandPink
-import com.example.ui.theme.ChatWallpaperDark
-import com.example.ui.theme.ChatWallpaperLight
-import com.example.ui.theme.EmeraldButton
-import com.example.ui.theme.ForestGreenHeader
 import com.example.ui.theme.OnlineEmerald
 import com.example.ui.theme.ReadBlueTick
 
@@ -152,7 +148,8 @@ fun WavyBrandBackdrop(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val palette = AppThemeTokens.current
+    val isDark = palette.isDark
     val baseColor = MaterialTheme.colorScheme.background
     val topAlpha = if (isDark) 0.24f else 0.88f
     val softAlpha = if (isDark) 0.14f else 0.32f
@@ -178,8 +175,8 @@ fun WavyBrandBackdrop(
                 path = topSoftWave,
                 brush = Brush.linearGradient(
                     colors = listOf(
-                        BrandGreenLight.copy(alpha = softAlpha),
-                        BrandGreen.copy(alpha = softAlpha * 0.6f)
+                        palette.waveSoftColor.copy(alpha = softAlpha),
+                        palette.accentColor.copy(alpha = softAlpha * 0.6f)
                     )
                 )
             )
@@ -195,8 +192,8 @@ fun WavyBrandBackdrop(
                 path = topMainWave,
                 brush = Brush.linearGradient(
                     colors = listOf(
-                        BrandGreen.copy(alpha = topAlpha),
-                        BrandGreenLight.copy(alpha = topAlpha * 0.85f)
+                        palette.accentColor.copy(alpha = topAlpha),
+                        palette.waveSoftColor.copy(alpha = topAlpha * 0.85f)
                     ),
                     start = Offset(0f, 0f),
                     end = Offset(w * 0.7f, h * 0.15f)
@@ -215,8 +212,8 @@ fun WavyBrandBackdrop(
                 path = bottomSoftWave,
                 brush = Brush.linearGradient(
                     colors = listOf(
-                        BrandGreenLight.copy(alpha = softAlpha * 0.7f),
-                        BrandGreen.copy(alpha = softAlpha)
+                        palette.waveSoftColor.copy(alpha = softAlpha * 0.7f),
+                        palette.accentColor.copy(alpha = softAlpha)
                     )
                 )
             )
@@ -233,8 +230,8 @@ fun WavyBrandBackdrop(
                 path = bottomMainWave,
                 brush = Brush.linearGradient(
                     colors = listOf(
-                        BrandGreen.copy(alpha = topAlpha * 0.92f),
-                        EmeraldButton.copy(alpha = topAlpha)
+                        palette.accentColor.copy(alpha = topAlpha * 0.92f),
+                        palette.waveDeepColor.copy(alpha = topAlpha)
                     ),
                     start = Offset(0f, h * 0.85f),
                     end = Offset(w, h)
@@ -251,6 +248,7 @@ fun WavyBrandBackdrop(
  */
 @Composable
 fun BrandedSplashScreen(modifier: Modifier = Modifier) {
+    val palette = AppThemeTokens.current
     WavyBrandBackdrop(modifier = modifier) {
         Column(
             modifier = Modifier
@@ -267,7 +265,7 @@ fun BrandedSplashScreen(modifier: Modifier = Modifier) {
                     fontSize = 33.sp,
                     fontWeight = FontWeight.Bold
                 ),
-                color = BrandGreen,
+                color = palette.accentColor,
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(4.dp))
@@ -299,7 +297,7 @@ fun BrandedSplashScreen(modifier: Modifier = Modifier) {
                 }
                 drawPath(
                     path = path,
-                    color = BrandGreen,
+                    color = palette.accentColor,
                     style = Stroke(width = 5f, cap = StrokeCap.Round)
                 )
             }
@@ -315,8 +313,9 @@ fun ChatDoodleWallpaper(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
-    val bgColor = if (isDark) ChatWallpaperDark else ChatWallpaperLight
+    val palette = AppThemeTokens.current
+    val isDark = palette.isDark
+    val bgColor = palette.chatWallpaperColor
     val motifColor = if (isDark) Color.White.copy(alpha = 0.04f) else Color(0xFF7B7060).copy(alpha = 0.08f)
 
     Box(
@@ -426,11 +425,12 @@ fun UserAvatar(
     hasStatusRing: Boolean = false,
     statusViewed: Boolean = false
 ) {
+    val palette = AppThemeTokens.current
     val initial = name.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "M"
     val ringColor = if (statusViewed) {
         MaterialTheme.colorScheme.outline
     } else {
-        BrandGreen
+        palette.accentColor
     }
     val ringModifier = if (hasStatusRing) {
         Modifier
@@ -450,14 +450,7 @@ fun UserAvatar(
                 .fillMaxSize()
                 .then(ringModifier)
                 .clip(CircleShape)
-                .background(
-                    Brush.linearGradient(
-                        listOf(
-                            Color(0xFFD9FDD3),
-                            Color(0xFFB7EFC5)
-                        )
-                    )
-                ),
+                .background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center
         ) {
             if (!photoUrl.isNullOrBlank()) {
@@ -471,7 +464,7 @@ fun UserAvatar(
                 Text(
                     text = initial,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = ForestGreenHeader
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
         }
@@ -578,7 +571,7 @@ fun EmptyIllustrationState(
             Spacer(modifier = Modifier.height(20.dp))
             Button(
                 onClick = onAction,
-                colors = ButtonDefaults.buttonColors(containerColor = EmeraldButton)
+                colors = ButtonDefaults.buttonColors(containerColor = AppThemeTokens.current.buttonColor)
             ) {
                 Text(actionLabel)
             }
@@ -598,7 +591,7 @@ fun LoadingStateBox(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        CircularProgressIndicator(strokeWidth = 3.dp, color = BrandGreen)
+        CircularProgressIndicator(strokeWidth = 3.dp, color = AppThemeTokens.current.accentColor)
         Spacer(modifier = Modifier.height(14.dp))
         Text(
             text = label,

@@ -76,12 +76,9 @@ import com.example.presentation.components.EmptyIllustrationState
 import com.example.presentation.components.ErrorBannerCard
 import com.example.presentation.components.LoadingStateBox
 import com.example.presentation.components.UserAvatar
-import com.example.ui.theme.BrandGreen
+import com.example.ui.theme.AppThemeTokens
 import com.example.ui.theme.DangerRose
 import com.example.ui.theme.OnlineEmerald
-import com.example.ui.theme.VoiceCallGradientBottom
-import com.example.ui.theme.VoiceCallGradientMid
-import com.example.ui.theme.VoiceCallGradientTop
 import com.example.utils.DateTimeUtils
 import kotlinx.coroutines.delay
 import org.webrtc.SurfaceViewRenderer
@@ -129,7 +126,8 @@ fun CallHistoryTabContent(
                             isOutgoing -> Icons.AutoMirrored.Filled.CallMade
                             else -> Icons.AutoMirrored.Filled.CallReceived
                         }
-                        val tint = if (isMissedOrRejected) DangerRose else BrandGreen
+                        val accent = AppThemeTokens.current.accentColor
+                        val tint = if (isMissedOrRejected) DangerRose else accent
 
                         Row(
                             modifier = Modifier
@@ -158,7 +156,7 @@ fun CallHistoryTabContent(
                             Text(
                                 text = DateTimeUtils.formatChatListTime(call.startedAt),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = if (isOutgoing || isMissedOrRejected) MaterialTheme.colorScheme.onSurfaceVariant else BrandGreen,
+                                color = if (isOutgoing || isMissedOrRejected) MaterialTheme.colorScheme.onSurfaceVariant else accent,
                                 modifier = Modifier.padding(end = 6.dp)
                             )
                             if (peerProfile != null) {
@@ -171,7 +169,7 @@ fun CallHistoryTabContent(
                                     Icon(
                                         imageVector = if (call.typeEnum == CallType.VIDEO) Icons.Default.Videocam else Icons.Default.Call,
                                         contentDescription = if (call.typeEnum == CallType.VIDEO) "Video call" else "Voice call",
-                                        tint = BrandGreen
+                                        tint = accent
                                     )
                                 }
                             }
@@ -280,12 +278,17 @@ fun ActiveCallScreen(
         closeScreenSafely(endRemoteCall = !isIncomingRinging)
     }
 
+    val palette = AppThemeTokens.current
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    listOf(VoiceCallGradientTop, VoiceCallGradientMid, VoiceCallGradientBottom)
+                    listOf(
+                        palette.voiceCallGradientTop,
+                        palette.voiceCallGradientMid,
+                        palette.voiceCallGradientBottom
+                    )
                 )
             )
     ) {

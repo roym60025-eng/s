@@ -11,6 +11,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import com.example.domain.model.AppThemeStyle
 import com.example.domain.model.ThemeMode
 import com.example.navigation.AppNavigation
 import com.example.notifications.BackgroundNotificationService
@@ -46,13 +47,18 @@ class MainActivity : ComponentActivity() {
         setContent {
             val themeMode by container.preferencesDataStore.themeModeFlow
                 .collectAsStateWithLifecycle(initialValue = ThemeMode.SYSTEM)
+            val appThemeStyle by container.preferencesDataStore.appThemeStyleFlow
+                .collectAsStateWithLifecycle(initialValue = AppThemeStyle.EMERALD)
             val isDark = when (themeMode) {
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
             }
 
-            ManojSonaliTheme(darkTheme = isDark) {
+            ManojSonaliTheme(
+                darkTheme = isDark,
+                themeStyle = appThemeStyle
+            ) {
                 AppNavigation(container = container)
             }
         }

@@ -8,6 +8,7 @@ import com.example.data.local.PreferencesDataStore
 import com.example.data.remote.MediaUploadProgress
 import com.example.data.remote.StorageMediaRepository
 import com.example.data.repository.AuthAndUserRepository
+import com.example.domain.model.AppThemeStyle
 import com.example.domain.model.ThemeMode
 import com.example.domain.model.UserPrivateSettings
 import com.example.domain.model.UserProfile
@@ -42,6 +43,9 @@ class ProfileSettingsViewModel(
     val themeMode: StateFlow<ThemeMode> = preferencesDataStore.themeModeFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), ThemeMode.SYSTEM)
 
+    val appThemeStyle: StateFlow<AppThemeStyle> = preferencesDataStore.appThemeStyleFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), AppThemeStyle.EMERALD)
+
     private val _uploadProgress = MutableStateFlow<Float?>(null)
     val uploadProgress: StateFlow<Float?> = _uploadProgress.asStateFlow()
 
@@ -55,6 +59,13 @@ class ProfileSettingsViewModel(
         viewModelScope.launch {
             preferencesDataStore.setThemeMode(mode)
             authRepository.updatePrivateSettings(mapOf("darkThemeMode" to mode.name))
+        }
+    }
+
+    fun setAppThemeStyle(style: AppThemeStyle) {
+        viewModelScope.launch {
+            preferencesDataStore.setAppThemeStyle(style)
+            authRepository.updatePrivateSettings(mapOf("appThemeStyle" to style.name))
         }
     }
 

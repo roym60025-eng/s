@@ -82,9 +82,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.TopAppBarDefaults
-import com.example.ui.theme.EmeraldButton
-import com.example.ui.theme.ForestGreenDarkHeader
-import com.example.ui.theme.ForestGreenHeader
+import com.example.ui.theme.AppThemeTokens
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -123,8 +121,8 @@ fun CreateStatusScreen(
         }
     }
 
-    val isDark = isSystemInDarkTheme()
-    val headerColor = if (isDark) ForestGreenDarkHeader else ForestGreenHeader
+    val paletteTokens = AppThemeTokens.current
+    val headerColor = paletteTokens.headerColor
 
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
@@ -291,7 +289,7 @@ fun CreateStatusScreen(
                     .height(54.dp)
                     .testTag("post_status_button"),
                 shape = RoundedCornerShape(28.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = EmeraldButton)
+                colors = ButtonDefaults.buttonColors(containerColor = paletteTokens.buttonColor)
             ) {
                 if (isPosting || uploadProgress != null) {
                     CircularProgressIndicator(

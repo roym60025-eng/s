@@ -87,9 +87,7 @@ import com.example.presentation.components.BrandLogoMark
 import com.example.presentation.components.ErrorBannerCard
 import com.example.presentation.components.GoogleGLogo
 import com.example.presentation.components.WavyBrandBackdrop
-import com.example.ui.theme.BrandGreen
-import com.example.ui.theme.EmeraldButton
-import com.example.ui.theme.ForestGreenHeader
+import com.example.ui.theme.AppThemeTokens
 import com.example.utils.CountryCode
 import com.example.utils.CountryCodes
 
@@ -183,7 +181,7 @@ private fun BrandLockup(
                 fontSize = 27.sp,
                 fontWeight = FontWeight.Bold
             ),
-            color = BrandGreen,
+            color = AppThemeTokens.current.accentColor,
             textAlign = TextAlign.Center
         )
         Text(
@@ -314,7 +312,7 @@ private fun WelcomeScreen(
                                         color = MaterialTheme.colorScheme.onSurface,
                                         fontWeight = FontWeight.Medium
                                     ),
-                                    cursorBrush = SolidColor(BrandGreen),
+                                    cursorBrush = SolidColor(AppThemeTokens.current.accentColor),
                                     keyboardOptions = KeyboardOptions(
                                         keyboardType = KeyboardType.Phone,
                                         imeAction = ImeAction.Done
@@ -336,6 +334,7 @@ private fun WelcomeScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
+                    val buttonColor = AppThemeTokens.current.buttonColor
                     Button(
                         onClick = { activity?.let(onSendOtp) },
                         enabled = !state.isLoading && state.phoneNumberInput.length >= 6 && activity != null,
@@ -345,9 +344,9 @@ private fun WelcomeScreen(
                             .testTag("send_otp_button"),
                         shape = RoundedCornerShape(28.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = EmeraldButton,
+                            containerColor = buttonColor,
                             contentColor = Color.White,
-                            disabledContainerColor = EmeraldButton.copy(alpha = 0.45f),
+                            disabledContainerColor = buttonColor.copy(alpha = 0.45f),
                             disabledContentColor = Color.White.copy(alpha = 0.85f)
                         )
                     ) {
@@ -426,7 +425,7 @@ private fun WelcomeScreen(
                     Text(
                         text = "Terms & Privacy Policy",
                         style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = BrandGreen,
+                        color = AppThemeTokens.current.accentColor,
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
                             .clickable { showTermsDialog = true }
@@ -630,6 +629,7 @@ private fun OtpVerificationScreen(
 
                 Spacer(modifier = Modifier.height(28.dp))
 
+                val palette = AppThemeTokens.current
                 Button(
                     onClick = onVerify,
                     enabled = state.otpCode.length == 6 && !state.isLoading,
@@ -639,9 +639,9 @@ private fun OtpVerificationScreen(
                         .testTag("verify_otp_button"),
                     shape = RoundedCornerShape(28.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = EmeraldButton,
+                        containerColor = palette.buttonColor,
                         contentColor = Color.White,
-                        disabledContainerColor = EmeraldButton.copy(alpha = 0.45f),
+                        disabledContainerColor = palette.buttonColor.copy(alpha = 0.45f),
                         disabledContentColor = Color.White.copy(alpha = 0.85f)
                     )
                 ) {
@@ -677,7 +677,7 @@ private fun OtpVerificationScreen(
                         Text(
                             text = "Resend OTP",
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                            color = BrandGreen
+                            color = palette.accentColor
                         )
                     }
                 }
@@ -708,7 +708,7 @@ private fun OtpSixDigitBoxes(
                     color = MaterialTheme.colorScheme.surface,
                     border = BorderStroke(
                         width = if (isFocusedSlot || char.isNotEmpty()) 1.5.dp else 1.dp,
-                        color = if (isFocusedSlot) BrandGreen else MaterialTheme.colorScheme.outline
+                        color = if (isFocusedSlot) AppThemeTokens.current.accentColor else MaterialTheme.colorScheme.outline
                     ),
                     modifier = Modifier.size(width = 46.dp, height = 54.dp)
                 ) {
@@ -774,7 +774,7 @@ private fun CreateProfileScreen(
             Text(
                 text = "Create your profile",
                 style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                color = ForestGreenHeader
+                color = AppThemeTokens.current.headerColor
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
@@ -791,7 +791,7 @@ private fun CreateProfileScreen(
                     .clip(CircleShape)
                     .border(
                         width = 3.dp,
-                        color = BrandGreen,
+                        color = AppThemeTokens.current.accentColor,
                         shape = CircleShape
                     )
                     .clickable {
@@ -814,7 +814,7 @@ private fun CreateProfileScreen(
                     Icon(
                         imageVector = Icons.Default.AddAPhoto,
                         contentDescription = "Upload profile photo",
-                        tint = BrandGreen,
+                        tint = AppThemeTokens.current.accentColor,
                         modifier = Modifier.size(34.dp)
                     )
                 }
@@ -837,7 +837,7 @@ private fun CreateProfileScreen(
             Text(
                 text = "Tap to upload profile photo",
                 style = MaterialTheme.typography.bodySmall,
-                color = BrandGreen
+                color = AppThemeTokens.current.accentColor
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -916,7 +916,7 @@ private fun CreateProfileScreen(
                     .height(54.dp)
                     .testTag("save_profile_button"),
                 shape = RoundedCornerShape(28.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = EmeraldButton)
+                colors = ButtonDefaults.buttonColors(containerColor = AppThemeTokens.current.buttonColor)
             ) {
                 if (state.isLoading) {
                     CircularProgressIndicator(

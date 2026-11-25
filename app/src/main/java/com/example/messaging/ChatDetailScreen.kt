@@ -115,17 +115,10 @@ import com.example.presentation.components.DeliveryTickIcon
 import com.example.presentation.components.ErrorBannerCard
 import com.example.presentation.components.LoadingStateBox
 import com.example.presentation.components.UserAvatar
-import com.example.ui.theme.BrandGreen
+import com.example.ui.theme.AppThemeTokens
 import com.example.ui.theme.DeepIndigoInk
-import com.example.ui.theme.EmeraldButton
-import com.example.ui.theme.ForestGreenDarkHeader
-import com.example.ui.theme.ForestGreenHeader
-import com.example.ui.theme.IncomingBubbleDark
-import com.example.ui.theme.IncomingBubbleLight
 import com.example.ui.theme.MutedSlateDark
 import com.example.ui.theme.MutedSlateLight
-import com.example.ui.theme.OutgoingGreenDark
-import com.example.ui.theme.OutgoingGreenLight
 import com.example.utils.DateTimeUtils
 import com.example.utils.VoicePlaybackState
 import java.text.SimpleDateFormat
@@ -169,8 +162,9 @@ fun ChatDetailScreen(
     var previewMediaMessage by remember { mutableStateOf<ChatMessage?>(null) }
 
     val listState = rememberLazyListState()
-    val isDark = isSystemInDarkTheme()
-    val headerColor = if (isDark) ForestGreenDarkHeader else ForestGreenHeader
+    val palette = AppThemeTokens.current
+    val isDark = palette.isDark
+    val headerColor = palette.headerColor
 
     val imagePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
@@ -330,7 +324,7 @@ fun ChatDetailScreen(
                 if (uploadProgress != null) {
                     LinearProgressIndicator(
                         progress = { uploadProgress ?: 0f },
-                        color = BrandGreen,
+                        color = palette.accentColor,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -401,7 +395,7 @@ fun ChatDetailScreen(
                                             ) {
                                                 Surface(
                                                     shape = RoundedCornerShape(10.dp),
-                                                    color = if (isDark) Color(0xFF1F2C34) else Color.White.copy(alpha = 0.92f),
+                                                    color = if (isDark) MaterialTheme.colorScheme.surfaceContainer else Color.White.copy(alpha = 0.92f),
                                                     shadowElevation = 0.5.dp
                                                 ) {
                                                     Text(
@@ -455,14 +449,14 @@ fun ChatDetailScreen(
                                     .width(4.dp)
                                     .height(34.dp)
                                     .clip(RoundedCornerShape(2.dp))
-                                    .background(BrandGreen)
+                                    .background(palette.accentColor)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = if (editingMessage != null) "Editing message" else "Replying to ${replyingTo?.senderName ?: "message"}",
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = BrandGreen
+                                    color = palette.accentColor
                                 )
                                 Text(
                                     text = editingMessage?.text ?: replyingTo?.text.orEmpty().ifBlank { "Media attachment" },
@@ -525,7 +519,7 @@ fun ChatDetailScreen(
                                 }
                                 LinearProgressIndicator(
                                     progress = { recordingState.amplitudeNormalized },
-                                    color = BrandGreen,
+                                    color = palette.accentColor,
                                     modifier = Modifier.weight(1f).height(8.dp).clip(RoundedCornerShape(4.dp))
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
@@ -539,7 +533,7 @@ fun ChatDetailScreen(
                                     modifier = Modifier
                                         .size(44.dp)
                                         .clip(CircleShape)
-                                        .background(EmeraldButton)
+                                        .background(palette.buttonColor)
                                 ) {
                                     Icon(Icons.Default.Stop, contentDescription = "Send voice", tint = Color.White)
                                 }
@@ -552,7 +546,7 @@ fun ChatDetailScreen(
                         ) {
                             Surface(
                                 shape = RoundedCornerShape(26.dp),
-                                color = if (isDark) ForestGreenDarkHeader else Color.White,
+                                color = if (isDark) MaterialTheme.colorScheme.surfaceContainer else Color.White,
                                 shadowElevation = 1.5.dp,
                                 modifier = Modifier.weight(1f)
                             ) {
@@ -593,7 +587,7 @@ fun ChatDetailScreen(
                                             textStyle = MaterialTheme.typography.bodyLarge.copy(
                                                 color = MaterialTheme.colorScheme.onSurface
                                             ),
-                                            cursorBrush = SolidColor(BrandGreen),
+                                            cursorBrush = SolidColor(palette.accentColor),
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .testTag("chat_message_input")
@@ -638,7 +632,7 @@ fun ChatDetailScreen(
                                     modifier = Modifier
                                         .size(48.dp)
                                         .clip(CircleShape)
-                                        .background(EmeraldButton)
+                                        .background(palette.buttonColor)
                                         .testTag("chat_send_button")
                                 ) {
                                     Icon(
@@ -659,7 +653,7 @@ fun ChatDetailScreen(
                                     modifier = Modifier
                                         .size(48.dp)
                                         .clip(CircleShape)
-                                        .background(EmeraldButton)
+                                        .background(palette.buttonColor)
                                         .testTag("chat_voice_record_button")
                                 ) {
                                     Icon(
@@ -864,7 +858,8 @@ private fun ChatMessageBubble(
     onReact: (String) -> Unit,
     onCopy: () -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val palette = AppThemeTokens.current
+    val isDark = palette.isDark
     var showMenu by remember { mutableStateOf(false) }
 
     val shape = if (isMine) {
@@ -873,12 +868,7 @@ private fun ChatMessageBubble(
         RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 16.dp)
     }
 
-    val bubbleColor = when {
-        isMine && isDark -> OutgoingGreenDark
-        isMine -> OutgoingGreenLight
-        isDark -> IncomingBubbleDark
-        else -> IncomingBubbleLight
-    }
+    val bubbleColor = if (isMine) palette.outgoingBubbleColor else palette.incomingBubbleColor
 
     val textColor = if (isDark) Color(0xFFE9EDEF) else DeepIndigoInk
     val metaColor = if (isDark) MutedSlateDark else MutedSlateLight
@@ -926,7 +916,7 @@ private fun ChatMessageBubble(
                                 Text(
                                     text = message.replyToSender ?: "Reply",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = BrandGreen
+                                    color = palette.accentColor
                                 )
                                 Text(
                                     text = message.replyToText,
@@ -986,7 +976,7 @@ private fun ChatMessageBubble(
                                         Icon(
                                             imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                             contentDescription = if (isPlaying) "Pause" else "Play",
-                                            tint = BrandGreen
+                                            tint = palette.accentColor
                                         )
                                     }
                                     LinearProgressIndicator(
@@ -995,7 +985,7 @@ private fun ChatMessageBubble(
                                                 (playbackState.positionMs.toFloat() / playbackState.durationMs.toFloat()).coerceIn(0f, 1f)
                                             } else 0f
                                         },
-                                        color = BrandGreen,
+                                        color = palette.accentColor,
                                         trackColor = textColor.copy(alpha = 0.18f),
                                         modifier = Modifier.weight(1f)
                                     )
@@ -1014,7 +1004,7 @@ private fun ChatMessageBubble(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.clickable(onClick = onOpenMedia)
                                 ) {
-                                    Icon(Icons.Default.Description, contentDescription = null, tint = BrandGreen)
+                                    Icon(Icons.Default.Description, contentDescription = null, tint = palette.accentColor)
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(

@@ -68,6 +68,24 @@ enum class ThemeMode {
     }
 }
 
+enum class AppThemeStyle(
+    val displayName: String,
+    val subtitle: String
+) {
+    EMERALD("Emerald Forest", "Signature green"),
+    OCEAN("Ocean Blue", "Deep sapphire"),
+    ROSE("Crimson Rose", "Romantic berry"),
+    VIOLET("Royal Violet", "Amethyst plum"),
+    SUNSET("Sunset Amber", "Warm terracotta"),
+    TEAL("Nordic Teal", "Cool cyan slate"),
+    MIDNIGHT("Midnight Gold", "Obsidian & gold");
+
+    companion object {
+        fun fromRaw(raw: String?): AppThemeStyle =
+            entries.firstOrNull { it.name == raw } ?: EMERALD
+    }
+}
+
 enum class ContactAddedVia {
     PHONE, QR, DIRECTORY;
     companion object {
@@ -108,6 +126,7 @@ data class UserPrivateSettings(
     val notifyCalls: Boolean = true,
     val notifyStatus: Boolean = true,
     val darkThemeMode: String = ThemeMode.SYSTEM.name,
+    val appThemeStyle: String = AppThemeStyle.EMERALD.name,
     val blockedUserIds: List<String> = emptyList(),
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null

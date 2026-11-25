@@ -109,10 +109,8 @@ import com.example.presentation.components.EmptyIllustrationState
 import com.example.presentation.components.ErrorBannerCard
 import com.example.presentation.components.LoadingStateBox
 import com.example.presentation.components.UserAvatar
-import com.example.ui.theme.BrandGreen
-import com.example.ui.theme.EmeraldButton
-import com.example.ui.theme.ForestGreenDarkHeader
-import com.example.ui.theme.ForestGreenHeader
+import androidx.compose.material.icons.filled.Palette
+import com.example.ui.theme.AppThemeTokens
 import com.example.utils.DateTimeUtils
 
 private enum class ChatListFilter {
@@ -169,8 +167,8 @@ fun HomeScreen(
     var showOverflowMenu by remember { mutableStateOf(false) }
     var chatFilter by remember { mutableStateOf(ChatListFilter.ALL) }
 
-    val isDark = isSystemInDarkTheme()
-    val headerColor = if (isDark) ForestGreenDarkHeader else ForestGreenHeader
+    val palette = AppThemeTokens.current
+    val headerColor = palette.headerColor
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val useRail = maxWidth >= 680.dp
@@ -315,8 +313,8 @@ fun HomeScreen(
                                             }
                                         )
                                         DropdownMenuItem(
-                                            text = { Text("Settings") },
-                                            leadingIcon = { Icon(Icons.Default.Settings, null) },
+                                            text = { Text("Themes & Settings") },
+                                            leadingIcon = { Icon(Icons.Default.Palette, null) },
                                             onClick = {
                                                 showOverflowMenu = false
                                                 onOpenSettings()
@@ -405,9 +403,9 @@ fun HomeScreen(
                                             )
                                         },
                                         colors = NavigationBarItemDefaults.colors(
-                                            selectedIconColor = EmeraldButton,
-                                            selectedTextColor = EmeraldButton,
-                                            indicatorColor = BrandGreen.copy(alpha = 0.14f),
+                                            selectedIconColor = palette.buttonColor,
+                                            selectedTextColor = palette.buttonColor,
+                                            indicatorColor = palette.accentColor.copy(alpha = 0.14f),
                                             unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                             unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                                         ),
@@ -423,7 +421,7 @@ fun HomeScreen(
                         HomeTab.CHATS -> FloatingActionButton(
                             onClick = { showNewChatSheet = true },
                             shape = CircleShape,
-                            containerColor = BrandGreen,
+                            containerColor = palette.accentColor,
                             contentColor = Color.White,
                             modifier = Modifier.testTag("fab_new_chat")
                         ) {
@@ -433,7 +431,7 @@ fun HomeScreen(
                         HomeTab.STATUS -> FloatingActionButton(
                             onClick = onCreateStatus,
                             shape = CircleShape,
-                            containerColor = BrandGreen,
+                            containerColor = palette.accentColor,
                             contentColor = Color.White,
                             modifier = Modifier.testTag("fab_new_status")
                         ) {
@@ -443,7 +441,7 @@ fun HomeScreen(
                         HomeTab.CALLS -> FloatingActionButton(
                             onClick = { showNewChatSheet = true },
                             shape = CircleShape,
-                            containerColor = BrandGreen,
+                            containerColor = palette.accentColor,
                             contentColor = Color.White,
                             modifier = Modifier.testTag("fab_new_call")
                         ) {
@@ -604,8 +602,8 @@ private fun ChatsHomeContent(
                                     onClick = { onFilterChange(chipFilter) },
                                     label = { Text(title) },
                                     colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = BrandGreen.copy(alpha = 0.16f),
-                                        selectedLabelColor = EmeraldButton
+                                        selectedContainerColor = AppThemeTokens.current.accentColor.copy(alpha = 0.16f),
+                                        selectedLabelColor = AppThemeTokens.current.buttonColor
                                     )
                                 )
                             }
@@ -697,7 +695,7 @@ private fun GroupFeedRow(
                 modifier = Modifier
                     .size(54.dp)
                     .clip(CircleShape)
-                    .background(BrandGreen),
+                    .background(AppThemeTokens.current.accentColor),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -791,7 +789,7 @@ private fun ChatRoomRow(
                         Icon(
                             imageVector = Icons.Default.PushPin,
                             contentDescription = "Pinned",
-                            tint = BrandGreen,
+                            tint = AppThemeTokens.current.accentColor,
                             modifier = Modifier.size(15.dp).padding(end = 4.dp)
                         )
                     }
@@ -806,7 +804,7 @@ private fun ChatRoomRow(
                     Text(
                         text = DateTimeUtils.formatChatListTime(room.lastMessageTime ?: room.createdAt),
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (unread > 0) BrandGreen else MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (unread > 0) AppThemeTokens.current.accentColor else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Spacer(modifier = Modifier.height(4.dp))
@@ -822,7 +820,7 @@ private fun ChatRoomRow(
                             else -> "Tap to say hello"
                         },
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (isPeerTyping) BrandGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (isPeerTyping) AppThemeTokens.current.accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
@@ -831,7 +829,7 @@ private fun ChatRoomRow(
                         Spacer(modifier = Modifier.width(8.dp))
                         Surface(
                             shape = CircleShape,
-                            color = BrandGreen
+                            color = AppThemeTokens.current.accentColor
                         ) {
                             Text(
                                 text = if (unread > 99) "99+" else unread.toString(),
@@ -918,7 +916,7 @@ private fun StatusTabContent(
                             .align(Alignment.BottomEnd)
                             .size(22.dp)
                             .clip(CircleShape)
-                            .background(BrandGreen)
+                            .background(AppThemeTokens.current.accentColor)
                             .border(2.dp, MaterialTheme.colorScheme.background, CircleShape)
                             .clickable { onCreateStatus() },
                         contentAlignment = Alignment.Center
@@ -1157,7 +1155,7 @@ private fun NewChatUserDiscoverySheet(
                             Text(
                                 text = "My Contacts",
                                 style = MaterialTheme.typography.labelLarge,
-                                color = EmeraldButton,
+                                color = AppThemeTokens.current.buttonColor,
                                 modifier = Modifier.padding(vertical = 6.dp)
                             )
                         }

@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.example.domain.model.AppThemeStyle
 import com.example.domain.model.ThemeMode
 import com.example.security.KeystoreManager
 import kotlinx.coroutines.flow.Flow
@@ -21,6 +22,7 @@ class PreferencesDataStore(
 ) {
     private object Keys {
         val THEME_MODE = stringPreferencesKey("theme_mode")
+        val APP_THEME_STYLE = stringPreferencesKey("app_theme_style")
         val ENCRYPTED_PHONE = stringPreferencesKey("encrypted_phone")
         val LAST_NOTIFIED_MSG_MS = longPreferencesKey("last_notified_msg_ms")
     }
@@ -29,9 +31,19 @@ class PreferencesDataStore(
         ThemeMode.fromRaw(prefs[Keys.THEME_MODE])
     }
 
+    val appThemeStyleFlow: Flow<AppThemeStyle> = appContext.dataStore.data.map { prefs ->
+        AppThemeStyle.fromRaw(prefs[Keys.APP_THEME_STYLE])
+    }
+
     suspend fun setThemeMode(mode: ThemeMode) {
         appContext.dataStore.edit { prefs ->
             prefs[Keys.THEME_MODE] = mode.name
+        }
+    }
+
+    suspend fun setAppThemeStyle(style: AppThemeStyle) {
+        appContext.dataStore.edit { prefs ->
+            prefs[Keys.APP_THEME_STYLE] = style.name
         }
     }
 

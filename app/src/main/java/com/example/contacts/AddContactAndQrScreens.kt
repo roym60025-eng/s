@@ -105,14 +105,10 @@ import com.example.domain.model.UserProfile
 import com.example.presentation.components.ErrorBannerCard
 import com.example.presentation.components.UserAvatar
 import com.example.security.InputValidator
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.TopAppBarDefaults
-import com.example.ui.theme.ForestGreenDarkHeader
-import com.example.ui.theme.ForestGreenHeader
-import com.example.ui.theme.IndigoPrimary
+import com.example.ui.theme.AppThemeTokens
 import com.example.ui.theme.OnlineEmerald
 import com.example.ui.theme.SoftBlueTertiary
-import com.example.ui.theme.VioletSecondary
 import java.util.concurrent.Executors
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -137,7 +133,7 @@ fun AddContactScreen(
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = if (isSystemInDarkTheme()) ForestGreenDarkHeader else ForestGreenHeader,
+                    containerColor = AppThemeTokens.current.headerColor,
                     titleContentColor = Color.White,
                     navigationIconContentColor = Color.White,
                     actionIconContentColor = Color.White
@@ -896,7 +892,7 @@ fun MyQrCodeScreen(
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = if (isSystemInDarkTheme()) ForestGreenDarkHeader else ForestGreenHeader,
+                    containerColor = AppThemeTokens.current.headerColor,
                     titleContentColor = Color.White,
                     navigationIconContentColor = Color.White,
                     actionIconContentColor = Color.White
@@ -945,10 +941,11 @@ fun MyQrCodeScreen(
                     modifier = Modifier.padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    val qrPalette = AppThemeTokens.current
                     Box(
                         modifier = Modifier
                             .clip(CircleShape)
-                            .background(Brush.linearGradient(listOf(IndigoPrimary, VioletSecondary, SoftBlueTertiary)))
+                            .background(Brush.linearGradient(listOf(qrPalette.headerColor, qrPalette.accentColor, SoftBlueTertiary)))
                             .padding(3.dp)
                     ) {
                         UserAvatar(
