@@ -90,6 +90,7 @@ service cloud.firestore {
                isValidBoolOpt(data, 'notifyCalls') &&
                isValidBoolOpt(data, 'notifyStatus') &&
                (!('darkThemeMode' in data) || data.darkThemeMode == null || data.darkThemeMode in ['SYSTEM', 'LIGHT', 'DARK']) &&
+               (!('appThemeStyle' in data) || data.appThemeStyle == null || data.appThemeStyle in ['EMERALD', 'OCEAN', 'ROSE', 'VIOLET', 'SUNSET', 'TEAL', 'MIDNIGHT']) &&
                (!('blockedUserIds' in data) || isValidBoundedList(data.blockedUserIds, 200));
       }
 
@@ -103,7 +104,7 @@ service cloud.firestore {
                            'uid', 'phoneNumber', 'countryCode', 'email', 'fcmToken',
                            'lastSeenVisible', 'onlineVisible', 'readReceiptsEnabled',
                            'notifyMessages', 'notifyGroups', 'notifyCalls', 'notifyStatus',
-                           'darkThemeMode', 'blockedUserIds', 'createdAt', 'updatedAt'
+                           'darkThemeMode', 'appThemeStyle', 'blockedUserIds', 'createdAt', 'updatedAt'
                          ]) &&
                          isValidPrivateSettings(incoming());
 
@@ -116,7 +117,7 @@ service cloud.firestore {
                            'phoneNumber', 'countryCode', 'email', 'fcmToken',
                            'lastSeenVisible', 'onlineVisible', 'readReceiptsEnabled',
                            'notifyMessages', 'notifyGroups', 'notifyCalls', 'notifyStatus',
-                           'darkThemeMode', 'blockedUserIds', 'updatedAt'
+                           'darkThemeMode', 'appThemeStyle', 'blockedUserIds', 'updatedAt'
                          ]);
 
         allow delete: if isOwner(userId);

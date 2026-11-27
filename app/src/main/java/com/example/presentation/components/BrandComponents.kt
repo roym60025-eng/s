@@ -43,7 +43,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
@@ -59,84 +58,120 @@ import coil.compose.AsyncImage
 import com.example.R
 import com.example.domain.model.DeliveryStatus
 import com.example.ui.theme.AppThemeTokens
-import com.example.ui.theme.BrandGreen
-import com.example.ui.theme.BrandPink
 import com.example.ui.theme.OnlineEmerald
 import com.example.ui.theme.ReadBlueTick
 
 /**
- * Signature Manoj & Sonali dual-tone heart speech-bubble logo:
- * emerald green left speech-bubble half + vibrant pink right heart half with inner cutout.
+ * Signature Manoj & Sonali dual overlapping speech-bubble logo:
+ * warm coral-rose back bubble + vibrant mint-emerald front bubble with white signal waves and heart spark.
  */
 @Composable
 fun BrandLogoMark(
     modifier: Modifier = Modifier,
-    size: Dp = 64.dp
+    size: Dp = 64.dp,
+    cutoutColor: Color = MaterialTheme.colorScheme.background
 ) {
-    val bgCutoutColor = MaterialTheme.colorScheme.background
     Canvas(modifier = modifier.size(size)) {
         val w = this.size.width
         val h = this.size.height
 
-        // Left green heart lobe + speech bubble tail
-        val leftHalf = Path().apply {
-            moveTo(w * 0.50f, h * 0.27f)
-            cubicTo(w * 0.42f, h * 0.11f, w * 0.14f, h * 0.11f, w * 0.10f, h * 0.34f)
-            cubicTo(w * 0.06f, h * 0.54f, w * 0.22f, h * 0.69f, w * 0.29f, h * 0.76f)
-            lineTo(w * 0.18f, h * 0.90f)
-            lineTo(w * 0.39f, h * 0.83f)
-            cubicTo(w * 0.44f, h * 0.86f, w * 0.48f, h * 0.89f, w * 0.50f, h * 0.91f)
-            lineTo(w * 0.50f, h * 0.27f)
-            close()
-        }
-
-        // Right magenta-pink heart lobe + subtle corner fold tail
-        val rightHalf = Path().apply {
-            moveTo(w * 0.50f, h * 0.27f)
-            cubicTo(w * 0.58f, h * 0.11f, w * 0.86f, h * 0.11f, w * 0.90f, h * 0.34f)
-            cubicTo(w * 0.94f, h * 0.57f, w * 0.75f, h * 0.74f, w * 0.50f, h * 0.91f)
-            lineTo(w * 0.50f, h * 0.27f)
-            close()
-        }
-
-        // Inner negative-space heart cutout
-        val innerHeart = Path().apply {
-            moveTo(w * 0.50f, h * 0.41f)
-            cubicTo(w * 0.44f, h * 0.32f, w * 0.29f, h * 0.34f, w * 0.29f, h * 0.48f)
-            cubicTo(w * 0.29f, h * 0.60f, w * 0.42f, h * 0.69f, w * 0.50f, h * 0.75f)
-            cubicTo(w * 0.58f, h * 0.69f, w * 0.71f, h * 0.60f, w * 0.71f, h * 0.48f)
-            cubicTo(w * 0.71f, h * 0.34f, w * 0.56f, h * 0.32f, w * 0.50f, h * 0.41f)
-            close()
-        }
-
-        val leftResult = Path().apply { op(leftHalf, innerHeart, PathOperation.Difference) }
-        val rightResult = Path().apply { op(rightHalf, innerHeart, PathOperation.Difference) }
-
-        drawPath(
-            path = leftResult,
-            brush = Brush.linearGradient(
-                colors = listOf(Color(0xFF1FD165), BrandGreen),
-                start = Offset(0f, 0f),
-                end = Offset(w * 0.55f, h)
+        // Back bubble (warm coral-rose, bottom-left tail)
+        val backBubble = Path().apply {
+            addOval(
+                androidx.compose.ui.geometry.Rect(
+                    left = w * 0.06f,
+                    top = h * 0.14f,
+                    right = w * 0.68f,
+                    bottom = h * 0.78f
+                )
             )
-        )
+            moveTo(w * 0.21f, h * 0.67f)
+            lineTo(w * 0.10f, h * 0.87f)
+            quadraticTo(w * 0.24f, h * 0.84f, w * 0.34f, h * 0.76f)
+            close()
+        }
         drawPath(
-            path = rightResult,
+            path = backBubble,
             brush = Brush.linearGradient(
-                colors = listOf(Color(0xFFFF2489), BrandPink),
-                start = Offset(w * 0.5f, 0f),
-                end = Offset(w, h)
+                colors = listOf(Color(0xFFFF8F85), Color(0xFFFF5A5F)),
+                start = Offset(w * 0.10f, h * 0.15f),
+                end = Offset(w * 0.65f, h * 0.85f)
             )
         )
 
-        // Subtle small white speech notch accent on lower-right curve
-        val notch = Path().apply {
-            moveTo(w * 0.56f, h * 0.85f)
-            lineTo(w * 0.63f, h * 0.77f)
-            lineTo(w * 0.66f, h * 0.85f)
+        // Subtle separation ring around front bubble
+        val frontRim = Path().apply {
+            addOval(
+                androidx.compose.ui.geometry.Rect(
+                    left = w * 0.24f,
+                    top = h * 0.12f,
+                    right = w * 0.94f,
+                    bottom = h * 0.82f
+                )
+            )
+        }
+        drawPath(
+            path = frontRim,
+            color = cutoutColor.copy(alpha = 0.38f),
+            style = Stroke(width = w * 0.045f)
+        )
+
+        // Front bubble (vibrant mint-emerald, bottom-right tail)
+        val frontBubble = Path().apply {
+            addOval(
+                androidx.compose.ui.geometry.Rect(
+                    left = w * 0.25f,
+                    top = h * 0.13f,
+                    right = w * 0.93f,
+                    bottom = h * 0.81f
+                )
+            )
+            moveTo(w * 0.66f, h * 0.76f)
+            quadraticTo(w * 0.77f, h * 0.86f, w * 0.89f, h * 0.88f)
+            lineTo(w * 0.80f, h * 0.68f)
             close()
         }
-        drawPath(path = notch, color = bgCutoutColor)
+        drawPath(
+            path = frontBubble,
+            brush = Brush.linearGradient(
+                colors = listOf(Color(0xFF4ADEA8), Color(0xFF10B981)),
+                start = Offset(w * 0.30f, h * 0.14f),
+                end = Offset(w * 0.90f, h * 0.86f)
+            )
+        )
+
+        // Crisp white voice/chat signal arcs inside front bubble
+        val strokeW = (w * 0.045f).coerceAtLeast(1.5f)
+        drawArc(
+            color = Color.White,
+            startAngle = 142f,
+            sweepAngle = 76f,
+            useCenter = false,
+            topLeft = Offset(w * 0.38f, h * 0.28f),
+            size = androidx.compose.ui.geometry.Size(w * 0.32f, h * 0.38f),
+            style = Stroke(width = strokeW, cap = StrokeCap.Round)
+        )
+        drawArc(
+            color = Color.White,
+            startAngle = 145f,
+            sweepAngle = 70f,
+            useCenter = false,
+            topLeft = Offset(w * 0.45f, h * 0.35f),
+            size = androidx.compose.ui.geometry.Size(w * 0.22f, h * 0.24f),
+            style = Stroke(width = strokeW, cap = StrokeCap.Round)
+        )
+
+        // Clean centered heart spark mark inside the front bubble
+        val hx = w * 0.68f
+        val hy = h * 0.48f
+        val hs = w * 0.095f
+        val heart = Path().apply {
+            moveTo(hx, hy + hs * 0.85f)
+            cubicTo(hx - hs * 1.35f, hy + hs * 0.05f, hx - hs * 1.15f, hy - hs * 1.05f, hx, hy - hs * 0.28f)
+            cubicTo(hx + hs * 1.15f, hy - hs * 1.05f, hx + hs * 1.35f, hy + hs * 0.05f, hx, hy + hs * 0.85f)
+            close()
+        }
+        drawPath(path = heart, color = Color.White)
     }
 }
 

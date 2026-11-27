@@ -2,12 +2,12 @@ package com.example.authentication
 
 import android.app.Activity
 import android.net.Uri
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,9 +21,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -32,16 +34,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AddAPhoto
-import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -49,12 +52,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -66,16 +66,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -86,7 +88,6 @@ import com.example.R
 import com.example.presentation.components.BrandLogoMark
 import com.example.presentation.components.ErrorBannerCard
 import com.example.presentation.components.GoogleGLogo
-import com.example.presentation.components.WavyBrandBackdrop
 import com.example.ui.theme.AppThemeTokens
 import com.example.utils.CountryCode
 import com.example.utils.CountryCodes
@@ -108,46 +109,14 @@ fun AuthFlowRoot(
 
     AnimatedContent(targetState = state.step, label = "auth_step") { step ->
         when (step) {
-            AuthStep.WELCOME -> WelcomeScreen(
+            AuthStep.WELCOME,
+            AuthStep.PHONE_INPUT,
+            AuthStep.OTP_VERIFY -> WelcomeScreen(
                 state = state,
-                onCountrySelected = viewModel::selectCountry,
-                onPhoneChanged = viewModel::onPhoneNumberChanged,
-                onSendOtp = { activity ->
-                    viewModel.sendOtp(activity, onAutoVerifiedReady = onAuthenticated)
-                },
                 onGoogleSignIn = { activity ->
                     viewModel.signInWithGoogle(activity, onSignedInAndReady = onAuthenticated)
                 }
             )
-
-            AuthStep.PHONE_INPUT -> {
-                BackHandler { viewModel.navigateTo(AuthStep.WELCOME) }
-                PhoneLoginScreen(
-                    state = state,
-                    onBack = { viewModel.navigateTo(AuthStep.WELCOME) },
-                    onCountrySelected = viewModel::selectCountry,
-                    onPhoneChanged = viewModel::onPhoneNumberChanged,
-                    onSendOtp = { activity ->
-                        viewModel.sendOtp(activity, onAutoVerifiedReady = onAuthenticated)
-                    },
-                    onGoogleSignIn = { activity ->
-                        viewModel.signInWithGoogle(activity, onSignedInAndReady = onAuthenticated)
-                    }
-                )
-            }
-
-            AuthStep.OTP_VERIFY -> {
-                BackHandler { viewModel.navigateTo(AuthStep.WELCOME) }
-                OtpVerificationScreen(
-                    state = state,
-                    onBack = { viewModel.navigateTo(AuthStep.WELCOME) },
-                    onOtpChanged = viewModel::onOtpChanged,
-                    onVerify = { viewModel.verifyOtp(onProfileExists = onAuthenticated) },
-                    onResend = { activity ->
-                        viewModel.sendOtp(activity, isResend = true, onAutoVerifiedReady = onAuthenticated)
-                    }
-                )
-            }
 
             AuthStep.CREATE_PROFILE -> {
                 CreateProfileScreen(
@@ -165,286 +134,303 @@ fun AuthFlowRoot(
 }
 
 @Composable
-private fun BrandLockup(
-    logoSizeDp: Int = 86,
-    modifier: Modifier = Modifier
+private fun AuthHeroCanvasBackground(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
 ) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally
+    val palette = AppThemeTokens.current
+    val gradientColors = listOf(
+        palette.headerColor,
+        palette.voiceCallGradientMid,
+        palette.buttonColor
+    )
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(Brush.linearGradient(colors = gradientColors))
     ) {
-        BrandLogoMark(size = logoSizeDp.dp)
-        Spacer(modifier = Modifier.height(10.dp))
-        Text(
-            text = stringResource(R.string.brand_title_upper),
-            style = MaterialTheme.typography.headlineLarge.copy(
-                fontSize = 27.sp,
-                fontWeight = FontWeight.Bold
-            ),
-            color = AppThemeTokens.current.accentColor,
-            textAlign = TextAlign.Center
-        )
-        Text(
-            text = stringResource(R.string.messaging_app_subtitle),
-            style = MaterialTheme.typography.titleMedium.copy(
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium
-            ),
-            color = MaterialTheme.colorScheme.onBackground,
-            textAlign = TextAlign.Center
-        )
+        Canvas(modifier = Modifier.matchParentSize()) {
+            val w = size.width
+            val h = minOf(size.height, 280.dp.toPx())
+
+            drawCircle(
+                color = Color.White.copy(alpha = 0.08f),
+                radius = w * 0.42f,
+                center = Offset(w * 0.92f, h * 0.14f)
+            )
+            drawCircle(
+                color = Color.White.copy(alpha = 0.06f),
+                radius = w * 0.34f,
+                center = Offset(w * 0.06f, h * 0.78f)
+            )
+            drawCircle(
+                color = Color.White.copy(alpha = 0.10f),
+                radius = w * 0.24f,
+                center = Offset(w * 0.80f, h * 0.74f),
+                style = Stroke(width = 1.5.dp.toPx())
+            )
+            val arcPath = Path().apply {
+                moveTo(0f, h * 0.38f)
+                quadraticTo(w * 0.5f, h * 0.10f, w, h * 0.44f)
+            }
+            drawPath(
+                path = arcPath,
+                color = Color.White.copy(alpha = 0.07f),
+                style = Stroke(width = 2.dp.toPx())
+            )
+        }
+        content()
     }
 }
 
 @Composable
 private fun WelcomeScreen(
     state: AuthUiState,
-    onCountrySelected: (CountryCode) -> Unit,
-    onPhoneChanged: (String) -> Unit,
-    onSendOtp: (Activity) -> Unit,
     onGoogleSignIn: (Activity) -> Unit
 ) {
     val activity = LocalContext.current as? Activity
-    var showCountryPicker by remember { mutableStateOf(false) }
     var showTermsDialog by remember { mutableStateOf(false) }
+    val palette = AppThemeTokens.current
+    val isDark = palette.isDark
 
-    Scaffold(
-        contentWindowInsets = WindowInsets.safeDrawing
-    ) { innerPadding ->
-        WavyBrandBackdrop {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .imePadding(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    modifier = Modifier
-                        .widthIn(max = 460.dp)
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 26.dp, vertical = 28.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Spacer(modifier = Modifier.height(18.dp))
-                    BrandLockup(logoSizeDp = 90)
-                    Spacer(modifier = Modifier.height(22.dp))
-
-                    Text(
-                        text = "Login to continue",
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium
-                        ),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Spacer(modifier = Modifier.height(18.dp))
-
-                    // Unified pill mobile number field matching showcase Login Screen
-                    Surface(
-                        shape = RoundedCornerShape(28.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                        tonalElevation = 1.dp,
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .imePadding()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Atmospheric Hero Header + Elevated Curved Sheet
+            AuthHeroCanvasBackground {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(56.dp)
+                            .windowInsetsPadding(WindowInsets.statusBars)
+                            .padding(horizontal = 24.dp, vertical = 28.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Surface(
+                            shape = CircleShape,
+                            color = if (isDark) Color(0xFF1A252D) else Color.White,
+                            shadowElevation = 10.dp,
+                            border = BorderStroke(2.dp, Color.White.copy(alpha = 0.35f)),
+                            modifier = Modifier.size(90.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                BrandLogoMark(
+                                    size = 58.dp,
+                                    cutoutColor = if (isDark) Color(0xFF1A252D) else Color.White
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Text(
+                            text = stringResource(R.string.brand_title_upper),
+                            style = MaterialTheme.typography.headlineLarge.copy(
+                                fontSize = 28.sp,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = Color.White,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = stringResource(R.string.tagline),
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.Medium
+                            ),
+                            color = Color.White.copy(alpha = 0.88f),
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
                         Row(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Call,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(19.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Row(
+                            HeroFeatureBadge("Instant Chat")
+                            HeroFeatureBadge("Voice Notes")
+                            HeroFeatureBadge("HD Calls")
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    // Elevated Curved Sheet Transition
+                    Surface(
+                        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+                        color = MaterialTheme.colorScheme.background,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.TopCenter
+                        ) {
+                            Column(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable { showCountryPicker = true }
-                                    .padding(horizontal = 6.dp, vertical = 6.dp)
-                                    .testTag("country_code_selector"),
-                                verticalAlignment = Alignment.CenterVertically
+                                    .widthIn(max = 460.dp)
+                                    .fillMaxWidth()
+                                    .windowInsetsPadding(WindowInsets.navigationBars)
+                                    .padding(horizontal = 24.dp, vertical = 28.dp),
+                                horizontalAlignment = Alignment.Start
                             ) {
                                 Text(
-                                    text = state.selectedCountry.dialCode,
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    text = "Sign in to continue",
+                                    style = MaterialTheme.typography.headlineSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 24.sp
+                                    ),
+                                    color = MaterialTheme.colorScheme.onBackground
                                 )
-                                Icon(
-                                    imageVector = Icons.Default.KeyboardArrowDown,
-                                    contentDescription = "Select country code",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp)
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "Use your Google account for fast, secure access to your chats, voice notes, and calls.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .padding(horizontal = 8.dp)
-                                    .width(1.dp)
-                                    .height(22.dp)
-                                    .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.6f))
-                            )
-                            Box(
-                                modifier = Modifier.weight(1f),
-                                contentAlignment = Alignment.CenterStart
-                            ) {
-                                if (state.phoneNumberInput.isEmpty()) {
-                                    Text(
-                                        text = stringResource(R.string.enter_mobile_number),
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
-                                    )
+
+                                Spacer(modifier = Modifier.height(22.dp))
+
+                                Surface(
+                                    shape = RoundedCornerShape(20.dp),
+                                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                    border = BorderStroke(
+                                        width = 1.dp,
+                                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                                    ) {
+                                        LoginHighlightRow(
+                                            icon = Icons.Default.Bolt,
+                                            tint = palette.accentColor,
+                                            title = "One-tap Google sign-in",
+                                            subtitle = "Get started immediately without waiting for SMS codes."
+                                        )
+                                        HorizontalDivider(
+                                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                                        )
+                                        LoginHighlightRow(
+                                            icon = Icons.Default.Shield,
+                                            tint = palette.accentColor,
+                                            title = "Private cloud sync",
+                                            subtitle = "Messages, voice messages, and profile stay backed up."
+                                        )
+                                    }
                                 }
-                                BasicTextField(
-                                    value = state.phoneNumberInput,
-                                    onValueChange = onPhoneChanged,
-                                    singleLine = true,
-                                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        fontWeight = FontWeight.Medium
-                                    ),
-                                    cursorBrush = SolidColor(AppThemeTokens.current.accentColor),
-                                    keyboardOptions = KeyboardOptions(
-                                        keyboardType = KeyboardType.Phone,
-                                        imeAction = ImeAction.Done
-                                    ),
-                                    keyboardActions = KeyboardActions(
-                                        onDone = {
-                                            if (!state.isLoading && state.phoneNumberInput.length >= 6) {
-                                                activity?.let(onSendOtp)
-                                            }
-                                        }
-                                    ),
+
+                                Spacer(modifier = Modifier.height(24.dp))
+
+                                Button(
+                                    onClick = {
+                                        activity?.let(onGoogleSignIn)
+                                    },
+                                    enabled = !state.isLoading && activity != null,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .testTag("phone_number_input")
-                                )
+                                        .height(56.dp)
+                                        .testTag("google_signin_button"),
+                                    shape = RoundedCornerShape(18.dp),
+                                    elevation = ButtonDefaults.buttonElevation(
+                                        defaultElevation = 2.dp,
+                                        pressedElevation = 0.dp
+                                    ),
+                                    border = BorderStroke(
+                                        width = 1.2.dp,
+                                        color = palette.accentColor.copy(alpha = 0.45f)
+                                    ),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isDark) {
+                                            MaterialTheme.colorScheme.surfaceContainerHigh
+                                        } else {
+                                            Color.White
+                                        },
+                                        contentColor = MaterialTheme.colorScheme.onSurface,
+                                        disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
+                                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                ) {
+                                    if (state.isLoading) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(22.dp),
+                                            color = palette.accentColor,
+                                            strokeWidth = 2.dp
+                                        )
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text(
+                                            text = "Signing in...",
+                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                                        )
+                                    } else {
+                                        GoogleGLogo(size = 22.dp)
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text(
+                                            text = stringResource(R.string.sign_in_with_google),
+                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                            contentDescription = null,
+                                            tint = palette.accentColor,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+
+                                if (state.errorMessage != null) {
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    ErrorBannerCard(message = state.errorMessage)
+                                }
+
+                                Spacer(modifier = Modifier.height(24.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                    Text(
+                                        text = "Secured by Firebase · ",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "Terms & Privacy",
+                                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                                        color = palette.accentColor,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .clickable { showTermsDialog = true }
+                                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                                    )
+                                }
                             }
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    val buttonColor = AppThemeTokens.current.buttonColor
-                    Button(
-                        onClick = { activity?.let(onSendOtp) },
-                        enabled = !state.isLoading && state.phoneNumberInput.length >= 6 && activity != null,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(54.dp)
-                            .testTag("send_otp_button"),
-                        shape = RoundedCornerShape(28.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = buttonColor,
-                            contentColor = Color.White,
-                            disabledContainerColor = buttonColor.copy(alpha = 0.45f),
-                            disabledContentColor = Color.White.copy(alpha = 0.85f)
-                        )
-                    ) {
-                        if (state.isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(22.dp),
-                                color = Color.White,
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Text(
-                                text = stringResource(R.string.send_otp),
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-                            )
-                        }
-                    }
-
-                    if (state.errorMessage != null) {
-                        Spacer(modifier = Modifier.height(14.dp))
-                        ErrorBannerCard(message = state.errorMessage)
-                    }
-
-                    Spacer(modifier = Modifier.height(18.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        HorizontalDivider(
-                            modifier = Modifier.weight(1f),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.65f)
-                        )
-                        Text(
-                            text = "  OR  ",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        HorizontalDivider(
-                            modifier = Modifier.weight(1f),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.65f)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(18.dp))
-
-                    OutlinedButton(
-                        onClick = { activity?.let(onGoogleSignIn) },
-                        enabled = !state.isLoading && activity != null,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(54.dp)
-                            .testTag("google_signin_button"),
-                        shape = RoundedCornerShape(28.dp),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surface,
-                            contentColor = MaterialTheme.colorScheme.onSurface
-                        )
-                    ) {
-                        GoogleGLogo(size = 20.dp)
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = stringResource(R.string.sign_in_with_google),
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Medium)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(26.dp))
-
-                    Text(
-                        text = "By continuing, you agree to our",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
-                    Text(
-                        text = "Terms & Privacy Policy",
-                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = AppThemeTokens.current.accentColor,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { showTermsDialog = true }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
                 }
             }
         }
-    }
-
-    if (showCountryPicker) {
-        CountryCodePickerSheet(
-            onDismiss = { showCountryPicker = false },
-            onSelect = {
-                onCountrySelected(it)
-                showCountryPicker = false
-            }
-        )
     }
 
     if (showTermsDialog) {
@@ -453,7 +439,7 @@ private fun WelcomeScreen(
             title = { Text("Terms & Privacy Policy") },
             text = {
                 Text(
-                    "Manoj & Sonali securely authenticates your account using Firebase Authentication (Google Sign-In or Phone OTP) and syncs your chats, calls, statuses, and profile privately under per-user security rules."
+                    "Manoj & Sonali securely authenticates your account using Google Sign-In via Firebase Authentication and syncs your chats, voice notes, calls, statuses, and profile privately under per-user security rules."
                 )
             },
             confirmButton = {
@@ -464,21 +450,59 @@ private fun WelcomeScreen(
 }
 
 @Composable
-private fun PhoneLoginScreen(
-    state: AuthUiState,
-    onBack: () -> Unit,
-    onCountrySelected: (CountryCode) -> Unit,
-    onPhoneChanged: (String) -> Unit,
-    onSendOtp: (Activity) -> Unit,
-    onGoogleSignIn: (Activity) -> Unit
+private fun LoginHighlightRow(
+    icon: ImageVector,
+    tint: Color,
+    title: String,
+    subtitle: String
 ) {
-    WelcomeScreen(
-        state = state,
-        onCountrySelected = onCountrySelected,
-        onPhoneChanged = onPhoneChanged,
-        onSendOtp = onSendOtp,
-        onGoogleSignIn = onGoogleSignIn
-    )
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = tint.copy(alpha = 0.14f),
+            modifier = Modifier.size(40.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = tint,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun HeroFeatureBadge(text: String) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = Color.White.copy(alpha = 0.16f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.24f))
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = Color.White,
+            modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp)
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -547,203 +571,6 @@ fun CountryCodePickerSheet(
 }
 
 @Composable
-private fun OtpVerificationScreen(
-    state: AuthUiState,
-    onBack: () -> Unit,
-    onOtpChanged: (String) -> Unit,
-    onVerify: () -> Unit,
-    onResend: (Activity) -> Unit
-) {
-    val activity = LocalContext.current as? Activity
-
-    Scaffold(
-        contentWindowInsets = WindowInsets.safeDrawing,
-        containerColor = MaterialTheme.colorScheme.background
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .imePadding(),
-            contentAlignment = Alignment.TopCenter
-        ) {
-            Column(
-                modifier = Modifier
-                    .widthIn(max = 460.dp)
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp, vertical = 12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-                BrandLockup(logoSizeDp = 82)
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Text(
-                    text = stringResource(R.string.verify_otp_title),
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = state.infoMessage ?: "Enter the 6 digit code sent to",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "${state.selectedCountry.dialCode} ${state.phoneNumberInput}",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onBackground,
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(26.dp))
-
-                // 6-box segmented OTP input matching showcase #3
-                OtpSixDigitBoxes(
-                    code = state.otpCode,
-                    onCodeChange = onOtpChanged,
-                    onDone = {
-                        if (state.otpCode.length == 6 && !state.isLoading) onVerify()
-                    }
-                )
-
-                if (state.errorMessage != null) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    ErrorBannerCard(message = state.errorMessage)
-                }
-
-                Spacer(modifier = Modifier.height(28.dp))
-
-                val palette = AppThemeTokens.current
-                Button(
-                    onClick = onVerify,
-                    enabled = state.otpCode.length == 6 && !state.isLoading,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(54.dp)
-                        .testTag("verify_otp_button"),
-                    shape = RoundedCornerShape(28.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = palette.buttonColor,
-                        contentColor = Color.White,
-                        disabledContainerColor = palette.buttonColor.copy(alpha = 0.45f),
-                        disabledContentColor = Color.White.copy(alpha = 0.85f)
-                    )
-                ) {
-                    if (state.isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(22.dp),
-                            color = Color.White,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text(
-                            text = stringResource(R.string.verify_button),
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(18.dp))
-
-                if (state.resendCountdownSec > 0) {
-                    val mm = (state.resendCountdownSec / 60).toString().padStart(2, '0')
-                    val ss = (state.resendCountdownSec % 60).toString().padStart(2, '0')
-                    Text(
-                        text = "Resend OTP ($mm:$ss)",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    TextButton(
-                        onClick = { activity?.let(onResend) },
-                        enabled = !state.isLoading && activity != null
-                    ) {
-                        Text(
-                            text = "Resend OTP",
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                            color = palette.accentColor
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun OtpSixDigitBoxes(
-    code: String,
-    onCodeChange: (String) -> Unit,
-    onDone: () -> Unit
-) {
-    Box(
-        modifier = Modifier.fillMaxWidth(),
-        contentAlignment = Alignment.Center
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
-        ) {
-            repeat(6) { index ->
-                val char = code.getOrNull(index)?.toString() ?: ""
-                val isFocusedSlot = index == code.length.coerceAtMost(5)
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(
-                        width = if (isFocusedSlot || char.isNotEmpty()) 1.5.dp else 1.dp,
-                        color = if (isFocusedSlot) AppThemeTokens.current.accentColor else MaterialTheme.colorScheme.outline
-                    ),
-                    modifier = Modifier.size(width = 46.dp, height = 54.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(
-                            text = char,
-                            style = MaterialTheme.typography.headlineMedium.copy(
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 22.sp
-                            ),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-            }
-        }
-
-        BasicTextField(
-            value = code,
-            onValueChange = { onCodeChange(it.filter { ch -> ch.isDigit() }.take(6)) },
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.NumberPassword,
-                imeAction = ImeAction.Done
-            ),
-            keyboardActions = KeyboardActions(onDone = { onDone() }),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-                .alpha(0.01f)
-                .testTag("otp_code_input")
-        )
-    }
-}
-
-@Composable
 private fun CreateProfileScreen(
     state: AuthUiState,
     onDisplayNameChanged: (String) -> Unit,
@@ -759,174 +586,227 @@ private fun CreateProfileScreen(
     ) { uri ->
         if (uri != null) onPickAvatar(uri)
     }
+    val palette = AppThemeTokens.current
 
-    Scaffold(contentWindowInsets = WindowInsets.safeDrawing) { innerPadding ->
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .imePadding()
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .imePadding()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 20.dp)
-                .widthIn(max = 520.dp),
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = "Create your profile",
-                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                color = AppThemeTokens.current.headerColor
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = "Choose how Manoj & Sonali contacts see you.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Box(
-                modifier = Modifier
-                    .size(116.dp)
-                    .clip(CircleShape)
-                    .border(
-                        width = 3.dp,
-                        color = AppThemeTokens.current.accentColor,
-                        shape = CircleShape
-                    )
-                    .clickable {
-                        photoPickerLauncher.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                        )
-                    }
-                    .testTag("pick_profile_avatar"),
-                contentAlignment = Alignment.Center
-            ) {
-                val previewModel: Any? = state.avatarLocalUri ?: state.uploadedAvatarUrl
-                if (previewModel != null) {
-                    AsyncImage(
-                        model = previewModel,
-                        contentDescription = "Profile photo preview",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.AddAPhoto,
-                        contentDescription = "Upload profile photo",
-                        tint = AppThemeTokens.current.accentColor,
-                        modifier = Modifier.size(34.dp)
-                    )
-                }
-                if (state.avatarUploadProgress != null) {
-                    Box(
+            AuthHeroCanvasBackground {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Column(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.45f)),
-                        contentAlignment = Alignment.Center
+                            .fillMaxWidth()
+                            .windowInsetsPadding(WindowInsets.statusBars)
+                            .padding(horizontal = 24.dp, vertical = 22.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        CircularProgressIndicator(
-                            progress = { state.avatarUploadProgress },
-                            color = Color.White
+                        Text(
+                            text = "Complete your profile",
+                            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                            color = Color.White,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Choose how Manoj & Sonali contacts see you.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.85f),
+                            textAlign = TextAlign.Center
                         )
                     }
-                }
-            }
 
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Tap to upload profile photo",
-                style = MaterialTheme.typography.bodySmall,
-                color = AppThemeTokens.current.accentColor
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            OutlinedTextField(
-                value = state.displayName,
-                onValueChange = onDisplayNameChanged,
-                label = { Text("Display Name *") },
-                placeholder = { Text("e.g. Manoj Roy") },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("profile_name_input")
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainer,
-                    modifier = Modifier
-                        .height(56.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .clickable { showCountryPicker = true }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    Surface(
+                        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+                        color = MaterialTheme.colorScheme.background,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("${state.selectedCountry.flagEmoji} ${state.selectedCountry.dialCode}")
-                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = null)
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.TopCenter
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .widthIn(max = 520.dp)
+                            .fillMaxWidth()
+                            .windowInsetsPadding(WindowInsets.navigationBars)
+                            .padding(horizontal = 24.dp, vertical = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(modifier = Modifier.size(118.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                    .border(
+                                        width = 3.dp,
+                                        color = palette.accentColor,
+                                        shape = CircleShape
+                                    )
+                                    .clickable {
+                                        photoPickerLauncher.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                        )
+                                    }
+                                    .testTag("pick_profile_avatar"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                val previewModel: Any? = state.avatarLocalUri ?: state.uploadedAvatarUrl
+                                if (previewModel != null) {
+                                    AsyncImage(
+                                        model = previewModel,
+                                        contentDescription = "Profile photo preview",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.AddAPhoto,
+                                        contentDescription = "Upload profile photo",
+                                        tint = palette.accentColor,
+                                        modifier = Modifier.size(34.dp)
+                                    )
+                                }
+                                if (state.avatarUploadProgress != null) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(Color.Black.copy(alpha = 0.45f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator(
+                                            progress = { state.avatarUploadProgress },
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(palette.buttonColor)
+                                    .border(2.dp, MaterialTheme.colorScheme.background, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CameraAlt,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Tap to upload profile photo",
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                            color = palette.accentColor
+                        )
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        OutlinedTextField(
+                            value = state.displayName,
+                            onValueChange = onDisplayNameChanged,
+                            label = { Text("Display Name *") },
+                            placeholder = { Text("e.g. Manoj Roy") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("profile_name_input")
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainer,
+                                modifier = Modifier
+                                    .height(56.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .clickable { showCountryPicker = true }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("${state.selectedCountry.flagEmoji} ${state.selectedCountry.dialCode}")
+                                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = null)
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            OutlinedTextField(
+                                value = state.phoneNumberInput,
+                                onValueChange = onPhoneChanged,
+                                label = { Text("Phone Number (optional)") },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        OutlinedTextField(
+                            value = state.about,
+                            onValueChange = onAboutChanged,
+                            label = { Text("About") },
+                            maxLines = 2,
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("profile_about_input")
+                        )
+
+                        if (state.errorMessage != null) {
+                            Spacer(modifier = Modifier.height(14.dp))
+                            ErrorBannerCard(message = state.errorMessage)
+                        }
+
+                        Spacer(modifier = Modifier.height(28.dp))
+
+                        Button(
+                            onClick = onCompleteProfile,
+                            enabled = !state.isLoading && state.displayName.isNotBlank(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(54.dp)
+                                .testTag("save_profile_button"),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = palette.buttonColor)
+                        ) {
+                            if (state.isLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(22.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Text("Continue to Manoj & Sonali", style = MaterialTheme.typography.titleMedium)
+                            }
+                        }
                     }
                 }
-                Spacer(modifier = Modifier.width(10.dp))
-                OutlinedTextField(
-                    value = state.phoneNumberInput,
-                    onValueChange = onPhoneChanged,
-                    label = { Text("Phone Number (optional)") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.weight(1f)
-                )
             }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            OutlinedTextField(
-                value = state.about,
-                onValueChange = onAboutChanged,
-                label = { Text("About") },
-                maxLines = 2,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("profile_about_input")
-            )
-
-            if (state.errorMessage != null) {
-                Spacer(modifier = Modifier.height(14.dp))
-                ErrorBannerCard(message = state.errorMessage)
-            }
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            Button(
-                onClick = onCompleteProfile,
-                enabled = !state.isLoading && state.displayName.isNotBlank(),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(54.dp)
-                    .testTag("save_profile_button"),
-                shape = RoundedCornerShape(28.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AppThemeTokens.current.buttonColor)
-            ) {
-                if (state.isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(22.dp),
-                        color = Color.White,
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Text("Continue to Manoj & Sonali", style = MaterialTheme.typography.titleMedium)
-                }
+        }
             }
         }
     }

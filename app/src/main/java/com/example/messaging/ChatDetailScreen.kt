@@ -115,6 +115,8 @@ import com.example.presentation.components.DeliveryTickIcon
 import com.example.presentation.components.ErrorBannerCard
 import com.example.presentation.components.LoadingStateBox
 import com.example.presentation.components.UserAvatar
+import com.example.presentation.components.VoiceMessageBubbleContent
+import com.example.presentation.components.VoiceRecordingBar
 import com.example.ui.theme.AppThemeTokens
 import com.example.ui.theme.DeepIndigoInk
 import com.example.ui.theme.MutedSlateDark
@@ -140,6 +142,8 @@ fun ChatDetailScreen(
         app?.container?.notificationMonitor?.setActiveChat(viewModel.chatId)
         onDispose {
             app?.container?.notificationMonitor?.setActiveChat(null)
+            viewModel.cancelVoiceRecording()
+            app?.container?.voiceRecorderPlayer?.stopPlayback()
         }
     }
     val chatRoom by viewModel.chatRoom.collectAsStateWithLifecycle()
@@ -153,6 +157,12 @@ fun ChatDetailScreen(
     val actionError by viewModel.actionError.collectAsStateWithLifecycle()
     val recordingState by viewModel.voiceRecordingState.collectAsStateWithLifecycle()
     val playbackState by viewModel.voicePlaybackState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(playbackState.errorMessage) {
+        val msg = playbackState.errorMessage ?: return@LaunchedEffect
+        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+        viewModel.clearVoicePlaybackError()
+    }
 
     var showAttachSheet by remember { mutableStateOf(false) }
     var showEmojiBar by remember { mutableStateOf(false) }
@@ -414,6 +424,8 @@ fun ChatDetailScreen(
                                             isMine = isMine,
                                             playbackState = playbackState,
                                             onPlayVoice = { viewModel.toggleVoicePlayback(msg) },
+                                            onSeekVoice = { fraction -> viewModel.seekVoicePlayback(msg, fraction) },
+                                            onCycleVoiceSpeed = { viewModel.cycleVoicePlaybackSpeed() },
                                             onOpenMedia = { previewMediaMessage = msg },
                                             onReply = { viewModel.startReply(msg) },
                                             onForward = { forwardTargetMessage = msg },
@@ -502,43 +514,18 @@ fun ChatDetailScreen(
                         .padding(horizontal = 8.dp, vertical = 8.dp)
                 ) {
                     if (recordingState.isRecording) {
-                        Surface(
-                            shape = RoundedCornerShape(28.dp),
-                            color = MaterialTheme.colorScheme.surface,
-                            shadowElevation = 2.dp,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                IconButton(onClick = viewModel::cancelVoiceRecording) {
-                                    Icon(Icons.Default.Delete, contentDescription = "Discard voice", tint = MaterialTheme.colorScheme.error)
+                        VoiceRecordingBar(
+                            recordingState = recordingState,
+                            onDiscard = viewModel::cancelVoiceRecording,
+                            onPauseResume = {
+                                if (recordingState.isPaused) {
+                                    viewModel.resumeVoiceRecording()
+                                } else {
+                                    viewModel.pauseVoiceRecording()
                                 }
-                                LinearProgressIndicator(
-                                    progress = { recordingState.amplitudeNormalized },
-                                    color = palette.accentColor,
-                                    modifier = Modifier.weight(1f).height(8.dp).clip(RoundedCornerShape(4.dp))
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(
-                                    text = DateTimeUtils.formatDurationMs(recordingState.elapsedMs),
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                IconButton(
-                                    onClick = viewModel::stopAndSendVoiceRecording,
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .clip(CircleShape)
-                                        .background(palette.buttonColor)
-                                ) {
-                                    Icon(Icons.Default.Stop, contentDescription = "Send voice", tint = Color.White)
-                                }
-                            }
-                        }
+                            },
+                            onStopAndSend = viewModel::stopAndSendVoiceRecording
+                        )
                     } else {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -850,6 +837,8 @@ private fun ChatMessageBubble(
     isMine: Boolean,
     playbackState: VoicePlaybackState,
     onPlayVoice: () -> Unit,
+    onSeekVoice: (Float) -> Unit,
+    onCycleVoiceSpeed: () -> Unit,
     onOpenMedia: () -> Unit,
     onReply: () -> Unit,
     onForward: () -> Unit,
@@ -968,36 +957,17 @@ private fun ChatMessageBubble(
                                 Text(message.mediaName ?: "Video", style = MaterialTheme.typography.bodySmall, color = textColor)
                             }
                             MessageType.VOICE, MessageType.AUDIO -> {
-                                val isActive = playbackState.activeMessageId == message.id
-                                val isPlaying = isActive && playbackState.isPlaying
-                                val durationMs = message.voiceDurationMs ?: playbackState.durationMs
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    IconButton(onClick = onPlayVoice, modifier = Modifier.size(38.dp)) {
-                                        Icon(
-                                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                            contentDescription = if (isPlaying) "Pause" else "Play",
-                                            tint = palette.accentColor
-                                        )
-                                    }
-                                    LinearProgressIndicator(
-                                        progress = {
-                                            if (isActive && playbackState.durationMs > 0L) {
-                                                (playbackState.positionMs.toFloat() / playbackState.durationMs.toFloat()).coerceIn(0f, 1f)
-                                            } else 0f
-                                        },
-                                        color = palette.accentColor,
-                                        trackColor = textColor.copy(alpha = 0.18f),
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = DateTimeUtils.formatDurationMs(
-                                            if (isActive && isPlaying) playbackState.positionMs else durationMs
-                                        ),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = metaColor
-                                    )
-                                }
+                                VoiceMessageBubbleContent(
+                                    messageId = message.id,
+                                    durationMs = message.voiceDurationMs,
+                                    label = if (message.messageType == MessageType.AUDIO) message.mediaName else null,
+                                    playbackState = playbackState,
+                                    textColor = textColor,
+                                    metaColor = metaColor,
+                                    onTogglePlay = onPlayVoice,
+                                    onSeek = onSeekVoice,
+                                    onCycleSpeed = onCycleVoiceSpeed
+                                )
                             }
                             MessageType.DOCUMENT -> {
                                 Row(

@@ -744,15 +744,6 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 20.dp)
                 )
             }
-            item {
-                SettingToggleRow(
-                    title = "Status Updates",
-                    subtitle = "24-hour status alerts",
-                    checked = settings?.notifyStatus ?: true,
-                    onCheckedChange = { viewModel.updateSettingToggle("notifyStatus", it) },
-                    modifier = Modifier.padding(horizontal = 20.dp)
-                )
-            }
 
             item { HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp)) }
 

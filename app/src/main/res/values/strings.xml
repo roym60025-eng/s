@@ -10,10 +10,11 @@
     <string name="verify_otp_title">Verify OTP</string>
     <string name="verify_button">Verify</string>
     <string name="tab_chats">Chats</string>
-    <string name="tab_status">Status</string>
+    <string name="tab_photos">Photos</string>
     <string name="tab_groups">Groups</string>
     <string name="tab_calls">Calls</string>
     <string name="tab_profile">Profile</string>
+    <string name="google_photos_title">Google Photos</string>
     <string name="empty_chats_title">No conversations yet</string>
     <string name="empty_chats_subtitle">Tap the chat button to connect with friends or start a group conversation.</string>
     <string name="error_generic">Something went wrong. Please try again.</string>
@@ -25,5 +26,5 @@
     <string name="bg_sync_channel_name">Background Message Sync</string>
     <string name="bg_sync_channel_desc">Keeps incoming message and call notifications active</string>
     <string name="bg_sync_notification_title">Manoj &amp; Sonali</string>
-    <string name="bg_sync_notification_body">Listening for incoming messages and calls</string>
+    <string name="bg_sync_notification_body">Connected • Real-time chats &amp; calls ready</string>
 </resources>

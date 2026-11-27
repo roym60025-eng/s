@@ -3,6 +3,7 @@ package com.example.data.local
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -16,6 +17,13 @@ import kotlinx.coroutines.flow.map
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "manoj_sonali_prefs")
 
+data class StoredGooglePhotosAccount(
+    val isConnected: Boolean = false,
+    val email: String? = null,
+    val displayName: String? = null,
+    val photoUrl: String? = null
+)
+
 class PreferencesDataStore(
     private val appContext: Context,
     private val keystoreManager: KeystoreManager
@@ -25,6 +33,10 @@ class PreferencesDataStore(
         val APP_THEME_STYLE = stringPreferencesKey("app_theme_style")
         val ENCRYPTED_PHONE = stringPreferencesKey("encrypted_phone")
         val LAST_NOTIFIED_MSG_MS = longPreferencesKey("last_notified_msg_ms")
+        val GPHOTOS_CONNECTED = booleanPreferencesKey("gphotos_connected")
+        val GPHOTOS_EMAIL = stringPreferencesKey("gphotos_email")
+        val GPHOTOS_NAME = stringPreferencesKey("gphotos_name")
+        val GPHOTOS_PHOTO_URL = stringPreferencesKey("gphotos_photo_url")
     }
 
     val themeModeFlow: Flow<ThemeMode> = appContext.dataStore.data.map { prefs ->
@@ -33,6 +45,37 @@ class PreferencesDataStore(
 
     val appThemeStyleFlow: Flow<AppThemeStyle> = appContext.dataStore.data.map { prefs ->
         AppThemeStyle.fromRaw(prefs[Keys.APP_THEME_STYLE])
+    }
+
+    val googlePhotosAccountFlow: Flow<StoredGooglePhotosAccount> = appContext.dataStore.data.map { prefs ->
+        StoredGooglePhotosAccount(
+            isConnected = prefs[Keys.GPHOTOS_CONNECTED] ?: false,
+            email = prefs[Keys.GPHOTOS_EMAIL],
+            displayName = prefs[Keys.GPHOTOS_NAME],
+            photoUrl = prefs[Keys.GPHOTOS_PHOTO_URL]
+        )
+    }
+
+    suspend fun saveGooglePhotosAccount(
+        email: String?,
+        displayName: String?,
+        photoUrl: String?
+    ) {
+        appContext.dataStore.edit { prefs ->
+            prefs[Keys.GPHOTOS_CONNECTED] = true
+            if (!email.isNullOrBlank()) prefs[Keys.GPHOTOS_EMAIL] = email else prefs.remove(Keys.GPHOTOS_EMAIL)
+            if (!displayName.isNullOrBlank()) prefs[Keys.GPHOTOS_NAME] = displayName else prefs.remove(Keys.GPHOTOS_NAME)
+            if (!photoUrl.isNullOrBlank()) prefs[Keys.GPHOTOS_PHOTO_URL] = photoUrl else prefs.remove(Keys.GPHOTOS_PHOTO_URL)
+        }
+    }
+
+    suspend fun clearGooglePhotosAccount() {
+        appContext.dataStore.edit { prefs ->
+            prefs.remove(Keys.GPHOTOS_CONNECTED)
+            prefs.remove(Keys.GPHOTOS_EMAIL)
+            prefs.remove(Keys.GPHOTOS_NAME)
+            prefs.remove(Keys.GPHOTOS_PHOTO_URL)
+        }
     }
 
     suspend fun setThemeMode(mode: ThemeMode) {
@@ -75,6 +118,10 @@ class PreferencesDataStore(
         appContext.dataStore.edit { prefs ->
             prefs.remove(Keys.ENCRYPTED_PHONE)
             prefs.remove(Keys.LAST_NOTIFIED_MSG_MS)
+            prefs.remove(Keys.GPHOTOS_CONNECTED)
+            prefs.remove(Keys.GPHOTOS_EMAIL)
+            prefs.remove(Keys.GPHOTOS_NAME)
+            prefs.remove(Keys.GPHOTOS_PHOTO_URL)
         }
     }
 }

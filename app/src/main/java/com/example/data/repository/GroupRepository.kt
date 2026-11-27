@@ -16,6 +16,9 @@ import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.snapshots
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.emitAll
@@ -325,5 +328,35 @@ class GroupRepository(
             handleFirestoreError(e, OperationType.UPDATE, path)
             Result.failure(e)
         }
+    }
+
+    suspend fun searchMessagesInGroups(
+        groupIds: List<String>,
+        query: String
+    ): Map<String, GroupMessage> = coroutineScope {
+        val uid = auth.currentUser?.uid ?: return@coroutineScope emptyMap()
+        val needle = query.trim().lowercase()
+        if (needle.isEmpty() || groupIds.isEmpty()) return@coroutineScope emptyMap()
+
+        groupIds.take(25).map { groupId ->
+            async {
+                val match = runCatching {
+                    val snap = db.collection("groups").document(groupId).collection("messages")
+                        .whereArrayContains("memberIds", uid)
+                        .get()
+                        .await()
+                    snap.toObjects(GroupMessage::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+                        .asSequence()
+                        .filter { it.deletedAt == null }
+                        .filter { msg ->
+                            msg.text.lowercase().contains(needle) ||
+                                (msg.mediaName?.lowercase()?.contains(needle) == true) ||
+                                (msg.senderName?.lowercase()?.contains(needle) == true)
+                        }
+                        .maxByOrNull { it.timestamp?.toDate()?.time ?: 0L }
+                }.getOrNull()
+                if (match != null) groupId to match else null
+            }
+        }.awaitAll().filterNotNull().toMap()
     }
 }

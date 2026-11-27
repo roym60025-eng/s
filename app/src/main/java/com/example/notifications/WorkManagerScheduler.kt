@@ -22,33 +22,6 @@ import com.google.firebase.firestore.DocumentSnapshot
 import kotlinx.coroutines.tasks.await
 import java.util.concurrent.TimeUnit
 
-class StatusExpiryCleanupWorker(
-    appContext: Context,
-    params: WorkerParameters
-) : CoroutineWorker(appContext, params) {
-
-    override suspend fun doWork(): Result {
-        val app = applicationContext as? ManojSonaliApp ?: return Result.success()
-        app.container.statusRepository.deleteExpiredOwnStatuses()
-        return Result.success()
-    }
-
-    companion object {
-        private const val WORK_NAME = "manoj_sonali_status_expiry_cleanup"
-
-        fun schedule(context: Context) {
-            val request = PeriodicWorkRequestBuilder<StatusExpiryCleanupWorker>(
-                6, TimeUnit.HOURS
-            ).build()
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                WORK_NAME,
-                ExistingPeriodicWorkPolicy.KEEP,
-                request
-            )
-        }
-    }
-}
-
 class IncomingMessageSyncWorker(
     appContext: Context,
     params: WorkerParameters
@@ -96,17 +69,18 @@ class IncomingMessageSyncWorker(
                         peerId !in blocked &&
                         msgTimeMs > lastNotifiedMs
                     ) {
-                        val senderName = container.authAndUserRepository
-                            .getUserProfileOnce(peerId)
-                            ?.displayName
+                        val peerProfile = container.authAndUserRepository.getUserProfileOnce(peerId)
+                        val senderName = peerProfile?.displayName
                             ?.takeIf { it.isNotBlank() }
                             ?: "New message"
-                        ManojSonaliMessagingService.showNotification(
+                        ManojSonaliMessagingService.showNotificationAsync(
                             context = applicationContext,
                             type = "message",
                             title = senderName,
                             body = room.lastMessage,
-                            targetId = room.id
+                            targetId = room.id,
+                            senderPhotoUrl = peerProfile?.photoUrl,
+                            senderName = senderName
                         )
                         if (msgTimeMs > newestMs) {
                             newestMs = msgTimeMs
@@ -131,12 +105,14 @@ class IncomingMessageSyncWorker(
                         uid !in group.mutedBy &&
                         msgTimeMs > lastNotifiedMs
                     ) {
-                        ManojSonaliMessagingService.showNotification(
+                        ManojSonaliMessagingService.showNotificationAsync(
                             context = applicationContext,
                             type = "group",
                             title = group.name,
-                            body = "${group.lastMessageSenderName}: ${group.lastMessage}",
-                            targetId = group.id
+                            body = group.lastMessage,
+                            targetId = group.id,
+                            senderPhotoUrl = group.imageUrl,
+                            senderName = group.lastMessageSenderName
                         )
                         if (msgTimeMs > newestMs) {
                             newestMs = msgTimeMs
@@ -160,13 +136,17 @@ class IncomingMessageSyncWorker(
                         call.callerId !in blocked &&
                         startedMs >= cutoff
                     ) {
-                        val kind = if (call.typeEnum == CallType.VIDEO) "video" else "voice"
-                        ManojSonaliMessagingService.showNotification(
+                        val isVideo = call.typeEnum == CallType.VIDEO
+                        val kind = if (isVideo) "video" else "voice"
+                        ManojSonaliMessagingService.showNotificationAsync(
                             context = applicationContext,
                             type = "call",
                             title = call.callerName ?: "Incoming Call",
                             body = "Incoming $kind call",
-                            targetId = call.id
+                            targetId = call.id,
+                            senderPhotoUrl = call.callerPhotoUrl,
+                            senderName = call.callerName,
+                            isVideoCall = isVideo
                         )
                     }
                 }

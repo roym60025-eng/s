@@ -47,6 +47,8 @@ import com.example.groups.GroupsViewModel
 import com.example.messaging.ChatDetailScreen
 import com.example.messaging.ChatDetailViewModel
 import com.example.notifications.BackgroundNotificationService
+import com.example.photos.GooglePhotosTabScreen
+import com.example.photos.GooglePhotosViewModel
 import com.example.presentation.components.BrandedSplashScreen
 import com.example.presentation.home.HomeScreen
 import com.example.presentation.home.HomeViewModel
@@ -55,12 +57,12 @@ import com.example.settings.BlockedContactsScreen
 import com.example.settings.EditProfileScreen
 import com.example.settings.ProfileScreen
 import com.example.settings.SettingsScreen
-import com.example.status.CreateStatusScreen
-import com.example.status.StatusViewModel
-import com.example.status.StatusViewerScreen
 import com.google.firebase.installations.FirebaseInstallations
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 object Routes {
     const val HOME = "home"
@@ -68,8 +70,6 @@ object Routes {
     const val CREATE_GROUP = "create_group"
     const val GROUP_CHAT = "group_chat/{groupId}"
     const val GROUP_INFO = "group_info/{groupId}"
-    const val CREATE_STATUS = "create_status"
-    const val VIEW_STATUS = "view_status/{userId}"
     const val ACTIVE_CALL = "active_call/{callId}"
     const val PROFILE = "profile"
     const val EDIT_PROFILE = "edit_profile"
@@ -81,7 +81,6 @@ object Routes {
     fun chatDetail(chatId: String) = "chat_detail/$chatId"
     fun groupChat(groupId: String) = "group_chat/$groupId"
     fun groupInfo(groupId: String) = "group_info/$groupId"
-    fun viewStatus(userId: String) = "view_status/$userId"
     fun activeCall(callId: String) = "active_call/$callId"
     fun addContact(tab: AddContactTab) = "add_contact/${tab.name}"
 }
@@ -96,15 +95,18 @@ fun AppNavigation(container: AppContainer) {
     var splashCompleted by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        delay(850L)
+        delay(450L)
         splashCompleted = true
     }
 
-    LaunchedEffect(Unit) {
-        if (!silentAttempted) {
+    LaunchedEffect(splashCompleted, currentUser) {
+        if (splashCompleted && currentUser == null && !silentAttempted) {
             silentAttempted = true
             withFrameNanos {}
-            container.authAndUserRepository.attemptSilentGoogleSignIn(context)
+            delay(250L)
+            withTimeoutOrNull(2500L) {
+                container.authAndUserRepository.attemptSilentGoogleSignIn(context)
+            }
         }
     }
 
@@ -162,19 +164,28 @@ private fun AuthenticatedShell(
 
     LaunchedEffect(currentUserId) {
         container.notificationMonitor.start(currentUserId)
-        val existing = container.authAndUserRepository.getUserProfileOnce(currentUserId)
+        val existing = withContext(Dispatchers.IO) {
+            container.authAndUserRepository.getUserProfileOnce(currentUserId)
+        }
         needsProfileSetup = existing == null || existing.displayName.isBlank()
         profileChecked = true
         if (!needsProfileSetup) {
-            container.authAndUserRepository.updatePresence(true)
-        }
-        try {
-            val installationId = FirebaseInstallations.getInstance().id.await()
-            if (!installationId.isNullOrBlank()) {
-                container.authAndUserRepository.saveFcmToken(installationId)
+            withContext(Dispatchers.IO) {
+                container.authAndUserRepository.updatePresence(true)
             }
-        } catch (_: Exception) {
         }
+        withContext(Dispatchers.IO) {
+            try {
+                val installationId = FirebaseInstallations.getInstance().id.await()
+                if (!installationId.isNullOrBlank()) {
+                    container.authAndUserRepository.saveFcmToken(installationId)
+                }
+            } catch (_: Exception) {
+            }
+        }
+        // Let HomeScreen complete its initial SurfaceSyncGroup frame before requesting system permissions
+        withFrameNanos {}
+        delay(350L)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
@@ -239,7 +250,6 @@ private fun AuthenticatedShell(
                     authRepository = container.authAndUserRepository,
                     chatRepository = container.chatRepository,
                     groupRepository = container.groupRepository,
-                    statusRepository = container.statusRepository,
                     callRepository = container.callRepository
                 )
             }
@@ -254,21 +264,20 @@ private fun AuthenticatedShell(
                     currentUserId = currentUserId,
                     authRepository = container.authAndUserRepository,
                     groupRepository = container.groupRepository,
-                    storageRepository = container.storageMediaRepository
+                    storageRepository = container.storageMediaRepository,
+                    voiceRecorderPlayer = container.voiceRecorderPlayer
                 )
             }
         }
     )
 
-    val statusViewModel: StatusViewModel = viewModel(
-        key = "status_$currentUserId",
+    val googlePhotosViewModel: GooglePhotosViewModel = viewModel(
+        key = "gphotos_$currentUserId",
         factory = viewModelFactory {
             initializer {
-                StatusViewModel(
-                    currentUserId = currentUserId,
-                    authRepository = container.authAndUserRepository,
-                    statusRepository = container.statusRepository,
-                    storageRepository = container.storageMediaRepository
+                GooglePhotosViewModel(
+                    photosRepository = container.googlePhotosRepository,
+                    preferencesDataStore = container.preferencesDataStore
                 )
             }
         }
@@ -325,8 +334,6 @@ private fun AuthenticatedShell(
                     onOpenChat = { chatId -> navController.navigate(Routes.chatDetail(chatId)) },
                     onOpenGroup = { groupId -> navController.navigate(Routes.groupChat(groupId)) },
                     onCreateGroup = { navController.navigate(Routes.CREATE_GROUP) },
-                    onCreateStatus = { navController.navigate(Routes.CREATE_STATUS) },
-                    onViewUserStatuses = { uid -> navController.navigate(Routes.viewStatus(uid)) },
                     onOpenAddContact = { tab -> navController.navigate(Routes.addContact(tab)) },
                     onOpenMyQr = { navController.navigate(Routes.MY_QR_CODE) },
                     onOpenProfile = { navController.navigate(Routes.PROFILE) },
@@ -340,6 +347,12 @@ private fun AuthenticatedShell(
                         callsViewModel.startOutgoingCall(peer, CallType.VIDEO) { callId ->
                             navController.navigate(Routes.activeCall(callId))
                         }
+                    },
+                    photosTabContent = { query ->
+                        GooglePhotosTabScreen(
+                            viewModel = googlePhotosViewModel,
+                            searchQuery = query
+                        )
                     },
                     callsTabContent = { callsState, usersMap ->
                         CallHistoryTabContent(
@@ -445,25 +458,6 @@ private fun AuthenticatedShell(
                     onExitedGroup = {
                         navController.popBackStack(Routes.HOME, inclusive = false)
                     }
-                )
-            }
-
-            composable(Routes.CREATE_STATUS) {
-                CreateStatusScreen(
-                    viewModel = statusViewModel,
-                    onBack = { navController.popBackStack() }
-                )
-            }
-
-            composable(
-                route = Routes.VIEW_STATUS,
-                arguments = listOf(navArgument("userId") { type = NavType.StringType })
-            ) { entry ->
-                val targetUserId = entry.arguments?.getString("userId").orEmpty()
-                StatusViewerScreen(
-                    targetUserId = targetUserId,
-                    viewModel = statusViewModel,
-                    onClose = { navController.popBackStack() }
                 )
             }
 

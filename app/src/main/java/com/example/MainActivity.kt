@@ -16,6 +16,7 @@ import com.example.domain.model.ThemeMode
 import com.example.navigation.AppNavigation
 import com.example.notifications.BackgroundNotificationService
 import com.example.ui.theme.ManojSonaliTheme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -34,11 +35,15 @@ class MainActivity : ComponentActivity() {
                         container.notificationMonitor.start(user.uid)
                         BackgroundNotificationService.start(this@MainActivity)
                     }
-                    lifecycleScope.launch { container.authAndUserRepository.updatePresence(true) }
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        container.authAndUserRepository.updatePresence(true)
+                    }
                 }
                 Lifecycle.Event.ON_STOP -> {
                     container.notificationMonitor.setAppForeground(false)
-                    lifecycleScope.launch { container.authAndUserRepository.updatePresence(false) }
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        container.authAndUserRepository.updatePresence(false)
+                    }
                 }
                 else -> Unit
             }

@@ -1,23 +1,24 @@
 package com.example
 
 import android.app.Application
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.os.Build
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import com.example.di.AppContainer
 import com.example.notifications.BackgroundNotificationService
 import com.example.notifications.IncomingMessageSyncWorker
 import com.example.notifications.ManojSonaliMessagingService
-import com.example.notifications.StatusExpiryCleanupWorker
 import com.example.utils.DataUriFetcher
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class ManojSonaliApp : Application(), ImageLoaderFactory {
     lateinit var container: AppContainer
         private set
+
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val authStateListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
         val user = firebaseAuth.currentUser
@@ -32,28 +33,11 @@ class ManojSonaliApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(applicationContext)
-        registerNotificationChannels()
-        StatusExpiryCleanupWorker.schedule(applicationContext)
-        IncomingMessageSyncWorker.schedule(applicationContext)
-        container.auth.addAuthStateListener(authStateListener)
-    }
-
-    private fun registerNotificationChannels() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val notificationManager = getSystemService(NotificationManager::class.java)
-            val incomingMessagesChannel = NotificationChannel(
-                ManojSonaliMessagingService.CHANNEL_MESSAGES,
-                "Incoming Messages",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Heads-up notifications for incoming direct messages"
-                enableLights(true)
-                enableVibration(true)
-                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-            }
-            notificationManager?.createNotificationChannel(incomingMessagesChannel)
+        appScope.launch {
+            ManojSonaliMessagingService.createChannels(applicationContext)
+            IncomingMessageSyncWorker.schedule(applicationContext)
         }
-        ManojSonaliMessagingService.createChannels(applicationContext)
+        container.auth.addAuthStateListener(authStateListener)
     }
 
     override fun newImageLoader(): ImageLoader {

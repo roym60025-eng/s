@@ -215,18 +215,38 @@ class ChatDetailViewModel(
         }
     }
 
+    fun pauseVoiceRecording() {
+        voiceRecorderPlayer.pauseRecording()
+    }
+
+    fun resumeVoiceRecording() {
+        voiceRecorderPlayer.resumeRecording()
+    }
+
     fun cancelVoiceRecording() {
         voiceRecorderPlayer.cancelRecording()
     }
 
     fun stopAndSendVoiceRecording() {
-        val (file, durationMs) = voiceRecorderPlayer.stopRecording() ?: return
-        sendVoiceFile(file, durationMs)
+        voiceRecorderPlayer.stopRecording().fold(
+            onSuccess = { (file, durationMs) ->
+                sendVoiceFile(file, durationMs)
+            },
+            onFailure = { err ->
+                _actionError.value = err.localizedMessage ?: "Recording was too short."
+            }
+        )
     }
 
     private fun sendVoiceFile(file: File, durationMs: Long) {
-        val room = chatRoom.value ?: return
+        val room = chatRoom.value
+        if (room == null) {
+            file.delete()
+            return
+        }
         val senderName = currentUser.value?.displayName ?: "Me"
+        val reply = _replyingTo.value
+        _replyingTo.value = null
         viewModelScope.launch {
             storageRepository.uploadFile("chat_media/$chatId", file, "audio/mp4").collect { progress ->
                 when (progress) {
@@ -242,13 +262,17 @@ class ChatDetailViewModel(
                             mediaUrl = progress.downloadUrl,
                             mediaName = progress.fileName,
                             mediaSizeBytes = progress.sizeBytes,
-                            voiceDurationMs = durationMs
-                        )
+                            voiceDurationMs = durationMs,
+                            replyTo = reply
+                        ).onFailure {
+                            _actionError.value = it.localizedMessage ?: "Failed to send voice message."
+                        }
                         file.delete()
                     }
                     is MediaUploadProgress.Failed -> {
                         _uploadProgress.value = null
                         _actionError.value = progress.message
+                        file.delete()
                     }
                 }
             }
@@ -258,6 +282,18 @@ class ChatDetailViewModel(
     fun toggleVoicePlayback(message: ChatMessage) {
         val url = message.mediaUrl ?: return
         voiceRecorderPlayer.togglePlay(message.id, url)
+    }
+
+    fun seekVoicePlayback(message: ChatMessage, fraction: Float) {
+        voiceRecorderPlayer.seekTo(message.id, fraction)
+    }
+
+    fun cycleVoicePlaybackSpeed() {
+        voiceRecorderPlayer.cyclePlaybackSpeed()
+    }
+
+    fun clearVoicePlaybackError() {
+        voiceRecorderPlayer.clearPlaybackError()
     }
 
     fun toggleReaction(message: ChatMessage, emoji: String) {
@@ -305,6 +341,7 @@ class ChatDetailViewModel(
 
     override fun onCleared() {
         super.onCleared()
+        voiceRecorderPlayer.cancelRecording()
         voiceRecorderPlayer.stopPlayback()
     }
 }

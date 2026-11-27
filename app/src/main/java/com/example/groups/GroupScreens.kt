@@ -1,5 +1,8 @@
 package com.example.groups
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -44,6 +47,7 @@ import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PersonRemove
 import androidx.compose.material3.AlertDialog
@@ -77,9 +81,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.domain.model.GroupMessage
@@ -91,11 +97,14 @@ import com.example.presentation.components.ChatDoodleWallpaper
 import com.example.presentation.components.ErrorBannerCard
 import com.example.presentation.components.LoadingStateBox
 import com.example.presentation.components.UserAvatar
+import com.example.presentation.components.VoiceMessageBubbleContent
+import com.example.presentation.components.VoiceRecordingBar
 import com.example.ui.theme.AppThemeTokens
 import com.example.ui.theme.DeepIndigoInk
 import com.example.ui.theme.MutedSlateDark
 import com.example.ui.theme.MutedSlateLight
 import com.example.utils.DateTimeUtils
+import com.example.utils.VoicePlaybackState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -242,11 +251,14 @@ fun GroupChatScreen(
     onBack: () -> Unit,
     onOpenInfo: () -> Unit
 ) {
-    val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as? com.example.ManojSonaliApp
+    val context = LocalContext.current
+    val app = context.applicationContext as? com.example.ManojSonaliApp
     androidx.compose.runtime.DisposableEffect(groupId) {
         app?.container?.notificationMonitor?.setActiveGroup(groupId)
         onDispose {
             app?.container?.notificationMonitor?.setActiveGroup(null)
+            viewModel.cancelVoiceRecording()
+            app?.container?.voiceRecorderPlayer?.stopPlayback()
         }
     }
 
@@ -257,6 +269,14 @@ fun GroupChatScreen(
     val messagesState by messagesFlow.collectAsStateWithLifecycle()
     val uploadProgress by viewModel.uploadProgress.collectAsStateWithLifecycle()
     val error by viewModel.errorMessage.collectAsStateWithLifecycle()
+    val recordingState by viewModel.voiceRecordingState.collectAsStateWithLifecycle()
+    val playbackState by viewModel.voicePlaybackState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(playbackState.errorMessage) {
+        val msg = playbackState.errorMessage ?: return@LaunchedEffect
+        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+        viewModel.clearVoicePlaybackError()
+    }
 
     var composer by remember { mutableStateOf("") }
     var replyTarget by remember { mutableStateOf<GroupMessage?>(null) }
@@ -267,6 +287,13 @@ fun GroupChatScreen(
     ) { uri ->
         val g = group
         if (uri != null && g != null) viewModel.sendGroupMedia(g, uri, MessageType.IMAGE)
+    }
+
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) viewModel.startVoiceRecording()
+        else Toast.makeText(context, "Microphone permission required", Toast.LENGTH_SHORT).show()
     }
 
     val palette = AppThemeTokens.current
@@ -351,6 +378,10 @@ fun GroupChatScreen(
                                 GroupMessageBubble(
                                     message = msg,
                                     isMine = msg.senderId == viewModel.currentUserId,
+                                    playbackState = playbackState,
+                                    onPlayVoice = { viewModel.toggleVoicePlayback(msg) },
+                                    onSeekVoice = { fraction -> viewModel.seekVoicePlayback(msg, fraction) },
+                                    onCycleVoiceSpeed = { viewModel.cycleVoicePlaybackSpeed() },
                                     onReply = { replyTarget = msg },
                                     onReact = { emoji -> viewModel.toggleReaction(groupId, msg, emoji) }
                                 )
@@ -368,7 +399,11 @@ fun GroupChatScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text("Replying to ${replyTarget?.senderName ?: "member"}", style = MaterialTheme.typography.labelMedium)
-                            Text(replyTarget?.text.orEmpty(), style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                            Text(
+                                text = replyTarget?.text.orEmpty().ifBlank { "Media attachment" },
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 1
+                            )
                         }
                         IconButton(onClick = { replyTarget = null }) {
                             Icon(Icons.Default.Close, contentDescription = "Cancel reply")
@@ -377,46 +412,100 @@ fun GroupChatScreen(
                 }
             }
 
-            Surface(
-                tonalElevation = 3.dp,
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                modifier = Modifier.fillMaxWidth()
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
+                    .padding(horizontal = 8.dp, vertical = 8.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
-                        .padding(horizontal = 8.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = {
-                        photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                    }) {
-                        Icon(Icons.Default.AttachFile, contentDescription = "Share image")
-                    }
-                    OutlinedTextField(
-                        value = composer,
-                        onValueChange = { composer = it },
-                        placeholder = { Text("Message group...") },
-                        maxLines = 4,
-                        shape = RoundedCornerShape(24.dp),
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    IconButton(
-                        onClick = {
-                            val g = group ?: return@IconButton
-                            if (composer.isNotBlank()) {
-                                viewModel.sendGroupMessage(g, composer, replyTarget)
-                                composer = ""
-                                replyTarget = null
+                if (recordingState.isRecording) {
+                    VoiceRecordingBar(
+                        recordingState = recordingState,
+                        onDiscard = viewModel::cancelVoiceRecording,
+                        onPauseResume = {
+                            if (recordingState.isPaused) {
+                                viewModel.resumeVoiceRecording()
+                            } else {
+                                viewModel.pauseVoiceRecording()
                             }
                         },
-                        modifier = Modifier
-                            .size(46.dp)
-                            .clip(CircleShape)
-                            .background(palette.buttonColor)
+                        onStopAndSend = {
+                            val g = group
+                            if (g != null) {
+                                viewModel.stopAndSendVoiceRecording(g, replyTarget)
+                                replyTarget = null
+                            } else {
+                                viewModel.cancelVoiceRecording()
+                            }
+                        }
+                    )
+                } else {
+                    Surface(
+                        tonalElevation = 3.dp,
+                        shape = RoundedCornerShape(28.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Color.White)
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(
+                                onClick = {
+                                    photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                },
+                                modifier = Modifier.testTag("group_attach_button")
+                            ) {
+                                Icon(Icons.Default.AttachFile, contentDescription = "Share image")
+                            }
+                            OutlinedTextField(
+                                value = composer,
+                                onValueChange = { composer = it },
+                                placeholder = { Text("Message group...") },
+                                maxLines = 4,
+                                shape = RoundedCornerShape(24.dp),
+                                modifier = Modifier.weight(1f).testTag("group_message_input")
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            if (composer.isNotBlank()) {
+                                IconButton(
+                                    onClick = {
+                                        val g = group ?: return@IconButton
+                                        viewModel.sendGroupMessage(g, composer, replyTarget)
+                                        composer = ""
+                                        replyTarget = null
+                                    },
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(CircleShape)
+                                        .background(palette.buttonColor)
+                                        .testTag("group_send_button")
+                                ) {
+                                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Color.White)
+                                }
+                            } else {
+                                IconButton(
+                                    onClick = {
+                                        val granted = ContextCompat.checkSelfPermission(
+                                            context, Manifest.permission.RECORD_AUDIO
+                                        ) == PackageManager.PERMISSION_GRANTED
+                                        if (granted) viewModel.startVoiceRecording()
+                                        else micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                    },
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(CircleShape)
+                                        .background(palette.buttonColor)
+                                        .testTag("group_voice_record_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Mic,
+                                        contentDescription = "Record voice message",
+                                        tint = Color.White
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -430,6 +519,10 @@ fun GroupChatScreen(
 private fun GroupMessageBubble(
     message: GroupMessage,
     isMine: Boolean,
+    playbackState: VoicePlaybackState,
+    onPlayVoice: () -> Unit,
+    onSeekVoice: (Float) -> Unit,
+    onCycleVoiceSpeed: () -> Unit,
     onReply: () -> Unit,
     onReact: (String) -> Unit
 ) {
@@ -457,7 +550,14 @@ private fun GroupMessageBubble(
                 modifier = Modifier
                     .widthIn(max = 300.dp)
                     .clip(shape)
-                    .combinedClickable(onClick = {}, onLongClick = { showMenu = true })
+                    .combinedClickable(
+                        onClick = {
+                            if (message.messageType == MessageType.VOICE || message.messageType == MessageType.AUDIO) {
+                                onPlayVoice()
+                            }
+                        },
+                        onLongClick = { showMenu = true }
+                    )
             ) {
                 Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
                     if (!isMine && !message.senderName.isNullOrBlank()) {
@@ -483,15 +583,33 @@ private fun GroupMessageBubble(
                             )
                         }
                     }
-                    if (message.messageType == MessageType.IMAGE && !message.mediaUrl.isNullOrBlank()) {
-                        AsyncImage(
-                            model = message.mediaUrl,
-                            contentDescription = "Group photo",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(12.dp))
-                        )
-                    } else {
-                        Text(message.text, style = MaterialTheme.typography.bodyLarge, color = textColor)
+                    when (message.messageType) {
+                        MessageType.IMAGE -> {
+                            if (!message.mediaUrl.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = message.mediaUrl,
+                                    contentDescription = "Group photo",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(12.dp))
+                                )
+                            }
+                        }
+                        MessageType.VOICE, MessageType.AUDIO -> {
+                            VoiceMessageBubbleContent(
+                                messageId = message.id,
+                                durationMs = message.voiceDurationMs,
+                                label = if (message.messageType == MessageType.AUDIO) message.mediaName else null,
+                                playbackState = playbackState,
+                                textColor = textColor,
+                                metaColor = metaColor,
+                                onTogglePlay = onPlayVoice,
+                                onSeek = onSeekVoice,
+                                onCycleSpeed = onCycleVoiceSpeed
+                            )
+                        }
+                        else -> {
+                            Text(message.text, style = MaterialTheme.typography.bodyLarge, color = textColor)
+                        }
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(

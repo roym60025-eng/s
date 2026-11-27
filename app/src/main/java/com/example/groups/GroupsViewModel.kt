@@ -13,6 +13,9 @@ import com.example.domain.model.MessageType
 import com.example.domain.model.UiState
 import com.example.domain.model.UserProfile
 import com.example.security.unwrapFirestoreError
+import com.example.utils.VoicePlaybackState
+import com.example.utils.VoiceRecorderPlayer
+import com.example.utils.VoiceRecordingState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -21,13 +24,18 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.File
 
 class GroupsViewModel(
     val currentUserId: String,
     private val authRepository: AuthAndUserRepository,
     private val groupRepository: GroupRepository,
-    private val storageRepository: StorageMediaRepository
+    private val storageRepository: StorageMediaRepository,
+    private val voiceRecorderPlayer: VoiceRecorderPlayer
 ) : ViewModel() {
+
+    val voiceRecordingState: StateFlow<VoiceRecordingState> = voiceRecorderPlayer.recordingState
+    val voicePlaybackState: StateFlow<VoicePlaybackState> = voiceRecorderPlayer.playbackState
 
     val allUsers: StateFlow<Map<String, UserProfile>> = authRepository.observeDiscoverableUsers()
         .map { list -> list.associateBy { it.uid } }
@@ -148,6 +156,91 @@ class GroupsViewModel(
         }
     }
 
+    fun startVoiceRecording() {
+        voiceRecorderPlayer.startRecording().onFailure {
+            _errorMessage.value = it.localizedMessage ?: "Microphone unavailable."
+        }
+    }
+
+    fun pauseVoiceRecording() {
+        voiceRecorderPlayer.pauseRecording()
+    }
+
+    fun resumeVoiceRecording() {
+        voiceRecorderPlayer.resumeRecording()
+    }
+
+    fun cancelVoiceRecording() {
+        voiceRecorderPlayer.cancelRecording()
+    }
+
+    fun stopAndSendVoiceRecording(group: GroupChat, replyTo: GroupMessage? = null) {
+        voiceRecorderPlayer.stopRecording().fold(
+            onSuccess = { (file, durationMs) ->
+                sendGroupVoiceFile(group, file, durationMs, replyTo)
+            },
+            onFailure = { err ->
+                _errorMessage.value = err.localizedMessage ?: "Voice recording was too short."
+            }
+        )
+    }
+
+    private fun sendGroupVoiceFile(
+        group: GroupChat,
+        file: File,
+        durationMs: Long,
+        replyTo: GroupMessage?
+    ) {
+        val senderName = currentUser.value?.displayName ?: "Member"
+        viewModelScope.launch {
+            storageRepository.uploadFile("group_media/${group.id}", file, "audio/mp4").collect { prog ->
+                when (prog) {
+                    is MediaUploadProgress.Uploading -> _uploadProgress.value = prog.fraction
+                    is MediaUploadProgress.Completed -> {
+                        _uploadProgress.value = null
+                        groupRepository.sendGroupMessage(
+                            groupId = group.id,
+                            memberIds = group.memberIds,
+                            senderName = senderName,
+                            type = MessageType.VOICE,
+                            text = "",
+                            mediaUrl = prog.downloadUrl,
+                            mediaName = prog.fileName,
+                            mediaSizeBytes = prog.sizeBytes,
+                            voiceDurationMs = durationMs,
+                            replyTo = replyTo
+                        ).onFailure {
+                            _errorMessage.value = it.localizedMessage ?: "Failed to send group voice message."
+                        }
+                        file.delete()
+                    }
+                    is MediaUploadProgress.Failed -> {
+                        _uploadProgress.value = null
+                        _errorMessage.value = prog.message
+                        file.delete()
+                    }
+                }
+            }
+        }
+    }
+
+    fun toggleVoicePlayback(message: GroupMessage) {
+        val url = message.mediaUrl ?: return
+        voiceRecorderPlayer.togglePlay(message.id, url)
+    }
+
+    fun seekVoicePlayback(message: GroupMessage, fraction: Float) {
+        voiceRecorderPlayer.seekTo(message.id, fraction)
+    }
+
+    fun cycleVoicePlaybackSpeed() {
+        voiceRecorderPlayer.cyclePlaybackSpeed()
+    }
+
+    fun clearVoicePlaybackError() {
+        voiceRecorderPlayer.clearPlaybackError()
+    }
+
     fun toggleReaction(groupId: String, message: GroupMessage, emoji: String) {
         viewModelScope.launch {
             groupRepository.toggleGroupReaction(groupId, message, emoji)
@@ -200,5 +293,11 @@ class GroupsViewModel(
 
     fun clearError() {
         _errorMessage.value = null
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        voiceRecorderPlayer.cancelRecording()
+        voiceRecorderPlayer.stopPlayback()
     }
 }

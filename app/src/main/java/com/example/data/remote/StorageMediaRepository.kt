@@ -192,6 +192,11 @@ class StorageMediaRepository(
             close()
             return@callbackFlow
         }
+        if (!file.exists() || file.length() <= 0L) {
+            trySend(MediaUploadProgress.Failed("Voice recording file is empty."))
+            close()
+            return@callbackFlow
+        }
         if (!InputValidator.isAllowedMediaMime(mimeType)) {
             trySend(MediaUploadProgress.Failed("Unsupported media type ($mimeType)."))
             close()
@@ -223,14 +228,22 @@ class StorageMediaRepository(
                 )
                 close()
             }.addOnFailureListener { err ->
-                trySend(MediaUploadProgress.Failed(err.localizedMessage ?: "Failed to get URL."))
+                trySend(
+                    MediaUploadProgress.Failed(
+                        err.localizedMessage ?: "Failed to retrieve voice file URL from Firebase Storage."
+                    )
+                )
                 close()
             }
         }.addOnFailureListener { err ->
-            trySend(MediaUploadProgress.Failed(err.localizedMessage ?: "Voice/media upload failed."))
+            trySend(
+                MediaUploadProgress.Failed(
+                    err.localizedMessage ?: "Voice upload failed. Verify Firebase Storage is enabled."
+                )
+            )
             close()
         }
-        awaitClose { if (!task.isComplete) task.cancel() }
+        awaitClose { runCatching { if (!task.isComplete) task.cancel() } }
     }
 
     suspend fun downloadToCache(remoteUrl: String, fileName: String): Result<File> = try {

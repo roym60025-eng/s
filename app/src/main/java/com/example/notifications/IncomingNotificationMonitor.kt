@@ -157,12 +157,15 @@ class IncomingNotificationMonitor(
                                 val senderName = snap.contactNames[peerId]
                                     ?: snap.usersMap[peerId]?.displayName
                                     ?: "New message"
-                                ManojSonaliMessagingService.showNotification(
+                                val senderPhoto = snap.usersMap[peerId]?.photoUrl
+                                ManojSonaliMessagingService.showNotificationAsync(
                                     context = appContext,
                                     type = "message",
                                     title = senderName,
                                     body = room.lastMessage,
-                                    targetId = room.id
+                                    targetId = room.id,
+                                    senderPhotoUrl = senderPhoto,
+                                    senderName = senderName
                                 )
                                 preferencesDataStore.updateLastNotifiedMessageMs(msgTimeMs)
                             }
@@ -194,12 +197,15 @@ class IncomingNotificationMonitor(
                             val senderName = snap.contactNames[peerId]
                                 ?: snap.usersMap[peerId]?.displayName
                                 ?: "New message"
-                            ManojSonaliMessagingService.showNotification(
+                            val senderPhoto = snap.usersMap[peerId]?.photoUrl
+                            ManojSonaliMessagingService.showNotificationAsync(
                                 context = appContext,
                                 type = "message",
                                 title = senderName,
                                 body = room.lastMessage,
-                                targetId = room.id
+                                targetId = room.id,
+                                senderPhotoUrl = senderPhoto,
+                                senderName = senderName
                             )
                             if (msgTimeMs > 0L) {
                                 preferencesDataStore.updateLastNotifiedMessageMs(msgTimeMs)
@@ -219,8 +225,9 @@ class IncomingNotificationMonitor(
                     usersFlow,
                     settingsFlow
                 ) { groups, usersMap, settings ->
-                    Triple(groups, usersMap[uid]?.displayName, settings)
-                }.collectLatest { (groups, myDisplayName, settings) ->
+                    Triple(groups, usersMap, settings)
+                }.collectLatest { (groups, usersMap, settings) ->
+                    val myDisplayName = usersMap[uid]?.displayName
                     val allowGroupNotifications = settings?.notifyGroups ?: true
 
                     if (!initialized) {
@@ -236,13 +243,18 @@ class IncomingNotificationMonitor(
                                 !isViewingThisGroup &&
                                 uid !in group.mutedBy
                             ) {
-                                val body = "${group.lastMessageSenderName}: ${group.lastMessage}"
-                                ManojSonaliMessagingService.showNotification(
+                                val senderPhoto = usersMap.values
+                                    .firstOrNull { it.displayName == group.lastMessageSenderName }
+                                    ?.photoUrl
+                                    ?: group.imageUrl
+                                ManojSonaliMessagingService.showNotificationAsync(
                                     context = appContext,
                                     type = "group",
                                     title = group.name,
-                                    body = body,
-                                    targetId = group.id
+                                    body = group.lastMessage,
+                                    targetId = group.id,
+                                    senderPhotoUrl = senderPhoto,
+                                    senderName = group.lastMessageSenderName
                                 )
                                 preferencesDataStore.updateLastNotifiedMessageMs(msgTimeMs)
                             }
@@ -265,13 +277,18 @@ class IncomingNotificationMonitor(
                         val isMuted = uid in group.mutedBy
 
                         if (isNew && allowGroupNotifications && !isViewingThisGroup && !isMuted) {
-                            val body = "${group.lastMessageSenderName}: ${group.lastMessage}"
-                            ManojSonaliMessagingService.showNotification(
+                            val senderPhoto = usersMap.values
+                                .firstOrNull { it.displayName == group.lastMessageSenderName }
+                                ?.photoUrl
+                                ?: group.imageUrl
+                            ManojSonaliMessagingService.showNotificationAsync(
                                 context = appContext,
                                 type = "group",
                                 title = group.name,
-                                body = body,
-                                targetId = group.id
+                                body = group.lastMessage,
+                                targetId = group.id,
+                                senderPhotoUrl = senderPhoto,
+                                senderName = group.lastMessageSenderName
                             )
                             if (msgTimeMs > 0L) {
                                 preferencesDataStore.updateLastNotifiedMessageMs(msgTimeMs)
@@ -288,10 +305,11 @@ class IncomingNotificationMonitor(
 
                 combine(
                     callRepository.observeCallHistory().catch { emit(emptyList()) },
+                    usersFlow,
                     settingsFlow
-                ) { calls, settings ->
-                    calls to settings
-                }.collectLatest { (calls, settings) ->
+                ) { calls, usersMap, settings ->
+                    Triple(calls, usersMap, settings)
+                }.collectLatest { (calls, usersMap, settings) ->
                     val allowCalls = settings?.notifyCalls ?: true
                     val blocked = settings?.blockedUserIds.orEmpty().toSet()
 
@@ -305,13 +323,18 @@ class IncomingNotificationMonitor(
                                 call.callerId !in blocked &&
                                 startedMs >= recentCutoff
                             if (isRecentIncoming && allowCalls && !isAppInForeground) {
-                                val kind = if (call.typeEnum == CallType.VIDEO) "video" else "voice"
-                                ManojSonaliMessagingService.showNotification(
+                                val isVideo = call.typeEnum == CallType.VIDEO
+                                val kind = if (isVideo) "video" else "voice"
+                                val callerPhoto = call.callerPhotoUrl ?: usersMap[call.callerId]?.photoUrl
+                                ManojSonaliMessagingService.showNotificationAsync(
                                     context = appContext,
                                     type = "call",
                                     title = call.callerName ?: "Incoming Call",
                                     body = "Incoming $kind call",
-                                    targetId = call.id
+                                    targetId = call.id,
+                                    senderPhotoUrl = callerPhoto,
+                                    senderName = call.callerName,
+                                    isVideoCall = isVideo
                                 )
                             }
                         }
@@ -326,13 +349,18 @@ class IncomingNotificationMonitor(
                                 call.statusEnum == CallStatus.RINGING &&
                                 call.callerId !in blocked
                             if (isIncomingRinging && allowCalls && !isAppInForeground) {
-                                val kind = if (call.typeEnum == CallType.VIDEO) "video" else "voice"
-                                ManojSonaliMessagingService.showNotification(
+                                val isVideo = call.typeEnum == CallType.VIDEO
+                                val kind = if (isVideo) "video" else "voice"
+                                val callerPhoto = call.callerPhotoUrl ?: usersMap[call.callerId]?.photoUrl
+                                ManojSonaliMessagingService.showNotificationAsync(
                                     context = appContext,
                                     type = "call",
                                     title = call.callerName ?: "Incoming Call",
                                     body = "Incoming $kind call",
-                                    targetId = call.id
+                                    targetId = call.id,
+                                    senderPhotoUrl = callerPhoto,
+                                    senderName = call.callerName,
+                                    isVideoCall = isVideo
                                 )
                             }
                         }

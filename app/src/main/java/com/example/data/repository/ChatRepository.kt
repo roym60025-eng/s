@@ -17,6 +17,9 @@ import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.snapshots
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.emitAll
@@ -386,5 +389,34 @@ class ChatRepository(
             handleFirestoreError(e, OperationType.UPDATE, path)
             Result.failure(e)
         }
+    }
+
+    suspend fun searchMessagesInChats(
+        chatIds: List<String>,
+        query: String
+    ): Map<String, ChatMessage> = coroutineScope {
+        val uid = auth.currentUser?.uid ?: return@coroutineScope emptyMap()
+        val needle = query.trim().lowercase()
+        if (needle.isEmpty() || chatIds.isEmpty()) return@coroutineScope emptyMap()
+
+        chatIds.take(25).map { chatId ->
+            async {
+                val match = runCatching {
+                    val snap = db.collection("chats").document(chatId).collection("messages")
+                        .whereArrayContains("participantIds", uid)
+                        .get()
+                        .await()
+                    snap.toObjects(ChatMessage::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+                        .asSequence()
+                        .filter { !it.isDeleted }
+                        .filter { msg ->
+                            msg.text.lowercase().contains(needle) ||
+                                (msg.mediaName?.lowercase()?.contains(needle) == true)
+                        }
+                        .maxByOrNull { it.timestamp?.toDate()?.time ?: 0L }
+                }.getOrNull()
+                if (match != null) chatId to match else null
+            }
+        }.awaitAll().filterNotNull().toMap()
     }
 }

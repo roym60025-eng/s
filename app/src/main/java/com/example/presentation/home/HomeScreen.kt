@@ -3,10 +3,8 @@ package com.example.presentation.home
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -35,26 +33,23 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.outlined.Chat
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AddCircleOutline
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DonutLarge
 import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Call
-import androidx.compose.material.icons.outlined.DonutLarge
+import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -102,14 +97,25 @@ import com.example.domain.model.GroupChat
 import com.example.domain.model.SavedContact
 import com.example.domain.model.UiState
 import com.example.domain.model.UserProfile
-import com.example.domain.model.UserStatus
 import com.example.presentation.components.BrandLogoMark
 import com.example.presentation.components.DeliveryTickIcon
 import com.example.presentation.components.EmptyIllustrationState
 import com.example.presentation.components.ErrorBannerCard
 import com.example.presentation.components.LoadingStateBox
 import com.example.presentation.components.UserAvatar
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.withStyle
+import com.example.domain.model.ChatMessage
+import com.example.domain.model.GroupMessage
 import com.example.ui.theme.AppThemeTokens
 import com.example.utils.DateTimeUtils
 
@@ -141,27 +147,25 @@ fun HomeScreen(
     onOpenChat: (String) -> Unit,
     onOpenGroup: (String) -> Unit,
     onCreateGroup: () -> Unit,
-    onCreateStatus: () -> Unit,
-    onViewUserStatuses: (String) -> Unit,
     onOpenAddContact: (AddContactTab) -> Unit,
     onOpenMyQr: () -> Unit,
     onOpenProfile: () -> Unit,
     onOpenSettings: () -> Unit,
     onStartVoiceCall: (UserProfile) -> Unit,
     onStartVideoCall: (UserProfile) -> Unit,
+    photosTabContent: @Composable (String) -> Unit,
     callsTabContent: @Composable (UiState<List<com.example.domain.model.CallSession>>, Map<String, UserProfile>) -> Unit
 ) {
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val isSearchActive by viewModel.isSearchActive.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
-    val currentProfile by viewModel.currentUserProfile.collectAsStateWithLifecycle()
     val privateSettings by viewModel.privateSettings.collectAsStateWithLifecycle()
     val usersMap by viewModel.usersMap.collectAsStateWithLifecycle()
     val savedContacts by viewModel.savedContacts.collectAsStateWithLifecycle()
     val chatsState by viewModel.chatsState.collectAsStateWithLifecycle()
     val groupsState by viewModel.groupsState.collectAsStateWithLifecycle()
-    val statuses by viewModel.statuses.collectAsStateWithLifecycle()
     val callsState by viewModel.callHistoryState.collectAsStateWithLifecycle()
+    val messageSearchMatches by viewModel.messageSearchMatches.collectAsStateWithLifecycle()
 
     var showNewChatSheet by remember { mutableStateOf(false) }
     var showOverflowMenu by remember { mutableStateOf(false) }
@@ -169,6 +173,7 @@ fun HomeScreen(
 
     val palette = AppThemeTokens.current
     val headerColor = palette.headerColor
+    val focusManager = LocalFocusManager.current
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val useRail = maxWidth >= 680.dp
@@ -217,7 +222,7 @@ fun HomeScreen(
                                 Text(
                                     text = when (selectedTab) {
                                         HomeTab.CHATS -> stringResource(R.string.brand_title_upper)
-                                        HomeTab.STATUS -> stringResource(R.string.tab_status)
+                                        HomeTab.PHOTOS -> stringResource(R.string.google_photos_title)
                                         HomeTab.CALLS -> stringResource(R.string.tab_calls)
                                     },
                                     style = MaterialTheme.typography.titleLarge.copy(
@@ -241,28 +246,15 @@ fun HomeScreen(
                                     )
                                 }
 
-                                if (selectedTab == HomeTab.STATUS) {
-                                    IconButton(
-                                        onClick = onCreateStatus,
-                                        modifier = Modifier.testTag("status_header_add_button")
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.AddCircleOutline,
-                                            contentDescription = "Add status",
-                                            tint = Color.White
-                                        )
-                                    }
-                                } else {
-                                    IconButton(
-                                        onClick = { onOpenAddContact(AddContactTab.QR_SCAN) },
-                                        modifier = Modifier.testTag("home_qr_scan_button")
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.QrCodeScanner,
-                                            contentDescription = "Scan QR to add contact",
-                                            tint = Color.White
-                                        )
-                                    }
+                                IconButton(
+                                    onClick = { onOpenAddContact(AddContactTab.QR_SCAN) },
+                                    modifier = Modifier.testTag("home_qr_scan_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.QrCodeScanner,
+                                        contentDescription = "Scan QR to add contact",
+                                        tint = Color.White
+                                    )
                                 }
 
                                 Box {
@@ -330,6 +322,18 @@ fun HomeScreen(
                                     onValueChange = viewModel::onSearchQueryChanged,
                                     placeholder = { Text("Search people, messages, or groups...") },
                                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                                    trailingIcon = {
+                                        if (searchQuery.isNotEmpty()) {
+                                            IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Close,
+                                                    contentDescription = "Clear search"
+                                                )
+                                            }
+                                        }
+                                    },
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                    keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
                                     singleLine = true,
                                     shape = RoundedCornerShape(24.dp),
                                     colors = OutlinedTextFieldDefaults.colors(
@@ -345,7 +349,7 @@ fun HomeScreen(
                                 )
                             }
 
-                            // Top sub-tabs bar matching Showcase #4 ("Chats | Status | Calls")
+                            // Top sub-tabs bar ("Chats | Photos | Calls")
                             if (selectedTab == HomeTab.CHATS && !useRail) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth()
@@ -382,7 +386,7 @@ fun HomeScreen(
                     }
                 },
                 bottomBar = {
-                    if (!useRail && (selectedTab == HomeTab.STATUS || selectedTab == HomeTab.CALLS || selectedTab == HomeTab.CHATS)) {
+                    if (!useRail) {
                         Column {
                             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
                             NavigationBar(
@@ -428,15 +432,7 @@ fun HomeScreen(
                             Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "Start new chat")
                         }
 
-                        HomeTab.STATUS -> FloatingActionButton(
-                            onClick = onCreateStatus,
-                            shape = CircleShape,
-                            containerColor = palette.accentColor,
-                            contentColor = Color.White,
-                            modifier = Modifier.testTag("fab_new_status")
-                        ) {
-                            Icon(Icons.Default.PhotoCamera, contentDescription = "Add status")
-                        }
+                        HomeTab.PHOTOS -> {}
 
                         HomeTab.CALLS -> FloatingActionButton(
                             onClick = { showNewChatSheet = true },
@@ -468,8 +464,13 @@ fun HomeScreen(
                                 chatsState = chatsState,
                                 groupsState = groupsState,
                                 usersMap = usersMap,
-                                statuses = statuses,
+                                savedContacts = savedContacts,
+                                searchQuery = searchQuery,
+                                isHeaderSearchActive = isSearchActive,
+                                messageSearchMatches = messageSearchMatches,
                                 filter = chatFilter,
+                                onSearchQueryChanged = viewModel::onSearchQueryChanged,
+                                onClearSearch = viewModel::clearSearch,
                                 onFilterChange = { chatFilter = it },
                                 onOpenChat = onOpenChat,
                                 onOpenGroup = onOpenGroup,
@@ -478,14 +479,7 @@ fun HomeScreen(
                                 onToggleMute = viewModel::toggleMute
                             )
 
-                            HomeTab.STATUS -> StatusTabContent(
-                                currentUserId = viewModel.currentUserId,
-                                currentProfile = currentProfile,
-                                statuses = statuses,
-                                searchQuery = searchQuery,
-                                onCreateStatus = onCreateStatus,
-                                onViewStatuses = onViewUserStatuses
-                            )
+                            HomeTab.PHOTOS -> photosTabContent(searchQuery)
 
                             HomeTab.CALLS -> callsTabContent(callsState, usersMap)
                         }
@@ -538,8 +532,13 @@ private fun ChatsHomeContent(
     chatsState: UiState<List<ChatRoom>>,
     groupsState: UiState<List<GroupChat>>,
     usersMap: Map<String, UserProfile>,
-    statuses: List<UserStatus>,
+    savedContacts: List<SavedContact>,
+    searchQuery: String,
+    isHeaderSearchActive: Boolean,
+    messageSearchMatches: MessageSearchMatches,
     filter: ChatListFilter,
+    onSearchQueryChanged: (String) -> Unit,
+    onClearSearch: () -> Unit,
     onFilterChange: (ChatListFilter) -> Unit,
     onOpenChat: (String) -> Unit,
     onOpenGroup: (String) -> Unit,
@@ -547,7 +546,9 @@ private fun ChatsHomeContent(
     onTogglePin: (String, Boolean) -> Unit,
     onToggleMute: (String, Boolean) -> Unit
 ) {
-    val groupedStatuses = remember(statuses) { statuses.groupBy { it.userId } }
+    val savedContactsMap = remember(savedContacts) { savedContacts.associateBy { it.contactUid } }
+    val focusManager = LocalFocusManager.current
+    val palette = AppThemeTokens.current
 
     when (chatsState) {
         is UiState.Loading -> LoadingStateBox("Loading conversations...")
@@ -580,88 +581,204 @@ private fun ChatsHomeContent(
                 )
             }
 
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 96.dp)
-            ) {
-                if (groups.isNotEmpty()) {
-                    item(key = "chat_filter_strip") {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            listOf(
-                                ChatListFilter.ALL to "All",
-                                ChatListFilter.DIRECT to "Direct",
-                                ChatListFilter.GROUPS to "Groups"
-                            ).forEach { (chipFilter, title) ->
-                                FilterChip(
-                                    selected = filter == chipFilter,
-                                    onClick = { onFilterChange(chipFilter) },
-                                    label = { Text(title) },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = AppThemeTokens.current.accentColor.copy(alpha = 0.16f),
-                                        selectedLabelColor = AppThemeTokens.current.buttonColor
+            Column(modifier = Modifier.fillMaxSize()) {
+                if (!isHeaderSearchActive) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = onSearchQueryChanged,
+                        placeholder = {
+                            Text(
+                                text = "Search chats by name or message...",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = "Search conversations",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(
+                                    onClick = {
+                                        onClearSearch()
+                                        focusManager.clearFocus()
+                                    },
+                                    modifier = Modifier.testTag("chat_list_search_clear_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Clear search"
                                     )
-                                )
+                                }
                             }
-                        }
-                    }
+                        },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
+                        singleLine = true,
+                        shape = RoundedCornerShape(24.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                            focusedBorderColor = palette.accentColor,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                            .testTag("chat_list_search_input")
+                    )
                 }
 
-                if (feedItems.isEmpty()) {
-                    item {
-                        EmptyIllustrationState(
-                            drawableRes = R.drawable.img_empty_chats,
-                            title = stringResource(R.string.empty_chats_title),
-                            subtitle = stringResource(R.string.empty_chats_subtitle),
-                            actionLabel = "Start a Chat",
-                            onAction = onNewChat
-                        )
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 96.dp)
+                ) {
+                    if (groups.isNotEmpty() || filter != ChatListFilter.ALL) {
+                        item(key = "chat_filter_strip") {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                listOf(
+                                    ChatListFilter.ALL to "All",
+                                    ChatListFilter.DIRECT to "Direct",
+                                    ChatListFilter.GROUPS to "Groups"
+                                ).forEach { (chipFilter, title) ->
+                                    FilterChip(
+                                        selected = filter == chipFilter,
+                                        onClick = { onFilterChange(chipFilter) },
+                                        label = { Text(title) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = palette.accentColor.copy(alpha = 0.16f),
+                                            selectedLabelColor = palette.buttonColor
+                                        )
+                                    )
+                                }
+                            }
+                        }
                     }
-                } else {
-                    items(
-                        items = feedItems,
-                        key = { item ->
-                            when (item) {
-                                is FeedItem.Direct -> "chat_${item.room.id}"
-                                is FeedItem.Group -> "group_${item.group.id}"
-                            }
-                        }
-                    ) { item ->
-                        when (item) {
-                            is FeedItem.Direct -> {
-                                val room = item.room
-                                val peerId = room.peerId(currentUserId)
-                                val peer = usersMap[peerId]
-                                val isPinned = currentUserId in room.pinnedBy
-                                val isMuted = currentUserId in room.mutedBy
-                                ChatRoomRow(
-                                    currentUserId = currentUserId,
-                                    room = room,
-                                    peer = peer,
-                                    hasStatus = groupedStatuses.containsKey(peerId),
-                                    isPinned = isPinned,
-                                    isMuted = isMuted,
-                                    onClick = { onOpenChat(room.id) },
-                                    onTogglePin = { onTogglePin(room.id, isPinned) },
-                                    onToggleMute = { onToggleMute(room.id, isMuted) }
-                                )
-                            }
 
-                            is FeedItem.Group -> {
-                                GroupFeedRow(
-                                    group = item.group,
-                                    onClick = { onOpenGroup(item.group.id) }
+                    if (searchQuery.isNotBlank()) {
+                        item(key = "chat_search_status_bar") {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = buildString {
+                                        append(feedItems.size)
+                                        append(if (feedItems.size == 1) " match" else " matches")
+                                        append(" for \"${searchQuery.trim()}\"")
+                                    },
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (messageSearchMatches.isSearching) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(14.dp),
+                                        strokeWidth = 2.dp,
+                                        color = palette.accentColor
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                }
+                                TextButton(
+                                    onClick = {
+                                        onClearSearch()
+                                        focusManager.clearFocus()
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                    modifier = Modifier.testTag("chat_search_clear_button")
+                                ) {
+                                    Text("Clear", color = palette.buttonColor)
+                                }
+                            }
+                        }
+                    }
+
+                    if (feedItems.isEmpty()) {
+                        item(key = "chat_empty_state") {
+                            if (searchQuery.isNotBlank()) {
+                                EmptyIllustrationState(
+                                    drawableRes = R.drawable.img_empty_chats,
+                                    title = "No conversations match \"${searchQuery.trim()}\"",
+                                    subtitle = if (messageSearchMatches.isSearching) {
+                                        "Searching through your message history..."
+                                    } else {
+                                        "Try searching by contact name, phone number, group name, or message content."
+                                    },
+                                    actionLabel = "Clear Search",
+                                    onAction = {
+                                        onClearSearch()
+                                        focusManager.clearFocus()
+                                    }
+                                )
+                            } else {
+                                EmptyIllustrationState(
+                                    drawableRes = R.drawable.img_empty_chats,
+                                    title = stringResource(R.string.empty_chats_title),
+                                    subtitle = stringResource(R.string.empty_chats_subtitle),
+                                    actionLabel = "Start a Chat",
+                                    onAction = onNewChat
                                 )
                             }
                         }
-                        HorizontalDivider(
-                            modifier = Modifier.padding(start = 82.dp, end = 16.dp),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)
-                        )
+                    } else {
+                        items(
+                            items = feedItems,
+                            key = { item ->
+                                when (item) {
+                                    is FeedItem.Direct -> "chat_${item.room.id}"
+                                    is FeedItem.Group -> "group_${item.group.id}"
+                                }
+                            }
+                        ) { item ->
+                            when (item) {
+                                is FeedItem.Direct -> {
+                                    val room = item.room
+                                    val peerId = room.peerId(currentUserId)
+                                    val peer = usersMap[peerId]
+                                    val isPinned = currentUserId in room.pinnedBy
+                                    val isMuted = currentUserId in room.mutedBy
+                                    ChatRoomRow(
+                                        currentUserId = currentUserId,
+                                        room = room,
+                                        peer = peer,
+                                        savedContact = savedContactsMap[peerId],
+                                        searchQuery = searchQuery,
+                                        matchedMessage = messageSearchMatches.chatMatches[room.id],
+                                        isPinned = isPinned,
+                                        isMuted = isMuted,
+                                        onClick = { onOpenChat(room.id) },
+                                        onTogglePin = { onTogglePin(room.id, isPinned) },
+                                        onToggleMute = { onToggleMute(room.id, isMuted) }
+                                    )
+                                }
+
+                                is FeedItem.Group -> {
+                                    GroupFeedRow(
+                                        group = item.group,
+                                        searchQuery = searchQuery,
+                                        matchedMessage = messageSearchMatches.groupMatches[item.group.id],
+                                        onClick = { onOpenGroup(item.group.id) }
+                                    )
+                                }
+                            }
+                            HorizontalDivider(
+                                modifier = Modifier.padding(start = 82.dp, end = 16.dp),
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)
+                            )
+                        }
                     }
                 }
             }
@@ -672,8 +789,31 @@ private fun ChatsHomeContent(
 @Composable
 private fun GroupFeedRow(
     group: GroupChat,
+    searchQuery: String = "",
+    matchedMessage: GroupMessage? = null,
     onClick: () -> Unit
 ) {
+    val palette = AppThemeTokens.current
+    val trimmedQuery = searchQuery.trim()
+    val defaultPreview = if (!group.lastMessageSenderName.isNullOrBlank() && group.lastMessage.isNotBlank()) {
+        "${group.lastMessageSenderName}: ${group.lastMessage}"
+    } else {
+        group.lastMessage.ifBlank { "${group.memberIds.size} members" }
+    }
+    val useDeepMatch = trimmedQuery.isNotEmpty() &&
+        !defaultPreview.contains(trimmedQuery, ignoreCase = true) &&
+        matchedMessage != null
+    val preview = if (useDeepMatch) {
+        "Match • ${matchedMessage!!.senderName}: ${matchedMessage.text}"
+    } else {
+        defaultPreview
+    }
+    val displayTime = if (useDeepMatch) {
+        matchedMessage?.timestamp ?: group.lastMessageTime ?: group.createdAt
+    } else {
+        group.lastMessageTime ?: group.createdAt
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -695,7 +835,7 @@ private fun GroupFeedRow(
                 modifier = Modifier
                     .size(54.dp)
                     .clip(CircleShape)
-                    .background(AppThemeTokens.current.accentColor),
+                    .background(palette.accentColor),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -711,31 +851,36 @@ private fun GroupFeedRow(
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = group.name,
+                    text = highlightSearchMatch(group.name, trimmedQuery, palette.accentColor),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
                 Text(
-                    text = DateTimeUtils.formatChatListTime(group.lastMessageTime ?: group.createdAt),
+                    text = DateTimeUtils.formatChatListTime(displayTime),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             Spacer(modifier = Modifier.height(4.dp))
-            val preview = if (!group.lastMessageSenderName.isNullOrBlank() && group.lastMessage.isNotBlank()) {
-                "${group.lastMessageSenderName}: ${group.lastMessage}"
-            } else {
-                group.lastMessage.ifBlank { "${group.memberIds.size} members" }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (useDeepMatch) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        tint = palette.accentColor,
+                        modifier = Modifier.size(14.dp).padding(end = 4.dp)
+                    )
+                }
+                Text(
+                    text = highlightSearchMatch(preview, trimmedQuery, palette.accentColor),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
-            Text(
-                text = preview,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
         }
     }
 }
@@ -746,7 +891,9 @@ private fun ChatRoomRow(
     currentUserId: String,
     room: ChatRoom,
     peer: UserProfile?,
-    hasStatus: Boolean,
+    savedContact: SavedContact? = null,
+    searchQuery: String = "",
+    matchedMessage: ChatMessage? = null,
     isPinned: Boolean,
     isMuted: Boolean,
     onClick: () -> Unit,
@@ -754,8 +901,21 @@ private fun ChatRoomRow(
     onToggleMute: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    val palette = AppThemeTokens.current
     val unread = room.unreadFor(currentUserId)
     val isPeerTyping = room.typingUserIds.any { it != currentUserId }
+    val displayName = peer?.displayName?.takeIf { it.isNotBlank() }
+        ?: savedContact?.displayName?.takeIf { it.isNotBlank() }
+        ?: "Manoj & Sonali Member"
+    val trimmedQuery = searchQuery.trim()
+    val lastMsgMatches = trimmedQuery.isNotEmpty() && room.lastMessage.contains(trimmedQuery, ignoreCase = true)
+    val phoneMatches = trimmedQuery.isNotEmpty() && (savedContact?.phoneNumber?.contains(trimmedQuery, ignoreCase = true) == true)
+    val useDeepMatch = trimmedQuery.isNotEmpty() && !lastMsgMatches && matchedMessage != null && !isPeerTyping
+    val displayTime = if (useDeepMatch) {
+        matchedMessage?.timestamp ?: room.lastMessageTime ?: room.createdAt
+    } else {
+        room.lastMessageTime ?: room.createdAt
+    }
 
     Box {
         Row(
@@ -769,17 +929,16 @@ private fun ChatRoomRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             UserAvatar(
-                name = peer?.displayName ?: "Contact",
-                photoUrl = peer?.photoUrl,
+                name = displayName,
+                photoUrl = peer?.photoUrl ?: savedContact?.photoUrl,
                 size = 54.dp,
-                isOnline = peer?.online == true,
-                hasStatusRing = hasStatus
+                isOnline = peer?.online == true
             )
             Spacer(modifier = Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = peer?.displayName ?: "Manoj & Sonali Member",
+                        text = highlightSearchMatch(displayName, trimmedQuery, palette.accentColor),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -789,7 +948,7 @@ private fun ChatRoomRow(
                         Icon(
                             imageVector = Icons.Default.PushPin,
                             contentDescription = "Pinned",
-                            tint = AppThemeTokens.current.accentColor,
+                            tint = palette.accentColor,
                             modifier = Modifier.size(15.dp).padding(end = 4.dp)
                         )
                     }
@@ -802,25 +961,39 @@ private fun ChatRoomRow(
                         )
                     }
                     Text(
-                        text = DateTimeUtils.formatChatListTime(room.lastMessageTime ?: room.createdAt),
+                        text = DateTimeUtils.formatChatListTime(displayTime),
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (unread > 0) AppThemeTokens.current.accentColor else MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (unread > 0) palette.accentColor else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (room.lastMessageSenderId == currentUserId && !isPeerTyping) {
+                    if (useDeepMatch) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            tint = palette.accentColor,
+                            modifier = Modifier.size(14.dp).padding(end = 4.dp)
+                        )
+                    } else if (room.lastMessageSenderId == currentUserId && !isPeerTyping) {
                         DeliveryTickIcon(status = DeliveryStatus.READ)
                         Spacer(modifier = Modifier.width(4.dp))
                     }
+                    val previewText = when {
+                        isPeerTyping -> "typing..."
+                        useDeepMatch -> "Match: ${matchedMessage!!.text}"
+                        phoneMatches && !lastMsgMatches -> "${savedContact?.phoneNumber.orEmpty()} • ${room.lastMessage.ifBlank { "Tap to say hello" }}"
+                        room.lastMessage.isNotBlank() -> room.lastMessage
+                        else -> "Tap to say hello"
+                    }
                     Text(
-                        text = when {
-                            isPeerTyping -> "typing..."
-                            room.lastMessage.isNotBlank() -> room.lastMessage
-                            else -> "Tap to say hello"
+                        text = if (isPeerTyping) {
+                            AnnotatedString(previewText)
+                        } else {
+                            highlightSearchMatch(previewText, trimmedQuery, palette.accentColor)
                         },
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (isPeerTyping) AppThemeTokens.current.accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (isPeerTyping) palette.accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
@@ -829,7 +1002,7 @@ private fun ChatRoomRow(
                         Spacer(modifier = Modifier.width(8.dp))
                         Surface(
                             shape = CircleShape,
-                            color = AppThemeTokens.current.accentColor
+                            color = palette.accentColor
                         ) {
                             Text(
                                 text = if (unread > 99) "99+" else unread.toString(),
@@ -856,190 +1029,34 @@ private fun ChatRoomRow(
     }
 }
 
-@Composable
-private fun StatusTabContent(
-    currentUserId: String,
-    currentProfile: UserProfile?,
-    statuses: List<UserStatus>,
-    searchQuery: String,
-    onCreateStatus: () -> Unit,
-    onViewStatuses: (String) -> Unit
-) {
-    val grouped = remember(statuses) { statuses.groupBy { it.userId } }
-    val myStatuses = grouped[currentUserId].orEmpty()
-    val q = searchQuery.trim().lowercase()
-
-    val peerEntries = remember(grouped, currentUserId, q) {
-        grouped.entries
-            .filter { it.key != currentUserId }
-            .filter { (_, list) ->
-                q.isEmpty() || (list.firstOrNull()?.userName?.lowercase()?.contains(q) == true)
+private fun highlightSearchMatch(
+    text: String,
+    query: String,
+    highlightColor: Color
+): AnnotatedString {
+    val needle = query.trim()
+    if (needle.isEmpty() || text.isEmpty()) return AnnotatedString(text)
+    return buildAnnotatedString {
+        var currentIndex = 0
+        while (currentIndex < text.length) {
+            val matchIndex = text.indexOf(needle, startIndex = currentIndex, ignoreCase = true)
+            if (matchIndex < 0) {
+                append(text.substring(currentIndex))
+                break
             }
-    }
-
-    val recentUpdates = remember(peerEntries, currentUserId) {
-        peerEntries.filter { (_, list) ->
-            list.any { currentUserId !in it.viewerIds }
-        }
-    }
-    val viewedUpdates = remember(peerEntries, currentUserId) {
-        peerEntries.filter { (_, list) ->
-            list.all { currentUserId in it.viewerIds }
-        }
-    }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 96.dp, top = 6.dp)
-    ) {
-        // My Status Header Row matching Showcase #6
-        item(key = "my_status_row") {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        if (myStatuses.isNotEmpty()) onViewStatuses(currentUserId) else onCreateStatus()
-                    }
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-                    .testTag("my_status_item"),
-                verticalAlignment = Alignment.CenterVertically
+            if (matchIndex > currentIndex) {
+                append(text.substring(currentIndex, matchIndex))
+            }
+            withStyle(
+                SpanStyle(
+                    fontWeight = FontWeight.Bold,
+                    color = highlightColor,
+                    background = highlightColor.copy(alpha = 0.16f)
+                )
             ) {
-                Box {
-                    UserAvatar(
-                        name = currentProfile?.displayName ?: "You",
-                        photoUrl = currentProfile?.photoUrl,
-                        size = 56.dp,
-                        hasStatusRing = myStatuses.isNotEmpty()
-                    )
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .size(22.dp)
-                            .clip(CircleShape)
-                            .background(AppThemeTokens.current.accentColor)
-                            .border(2.dp, MaterialTheme.colorScheme.background, CircleShape)
-                            .clickable { onCreateStatus() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "Add status",
-                            tint = Color.White,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.width(14.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "My Status",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = if (myStatuses.isNotEmpty()) {
-                            DateTimeUtils.formatStatusAge(myStatuses.first().createdAt)
-                        } else {
-                            "Tap to add status update"
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                append(text.substring(matchIndex, matchIndex + needle.length))
             }
-        }
-
-        if (recentUpdates.isNotEmpty()) {
-            item(key = "recent_header") {
-                Text(
-                    text = "Recent Updates",
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                )
-            }
-            items(recentUpdates, key = { "recent_${it.key}" }) { (uid, list) ->
-                val latest = list.firstOrNull() ?: return@items
-                StatusContactRow(
-                    userName = latest.userName,
-                    photoUrl = latest.userPhotoUrl,
-                    timeText = DateTimeUtils.formatStatusAge(latest.createdAt),
-                    isViewed = false,
-                    onClick = { onViewStatuses(uid) }
-                )
-            }
-        }
-
-        if (viewedUpdates.isNotEmpty()) {
-            item(key = "viewed_header") {
-                Text(
-                    text = "Viewed Updates",
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-                )
-            }
-            items(viewedUpdates, key = { "viewed_${it.key}" }) { (uid, list) ->
-                val latest = list.firstOrNull() ?: return@items
-                StatusContactRow(
-                    userName = latest.userName,
-                    photoUrl = latest.userPhotoUrl,
-                    timeText = DateTimeUtils.formatStatusAge(latest.createdAt),
-                    isViewed = true,
-                    onClick = { onViewStatuses(uid) }
-                )
-            }
-        }
-
-        if (recentUpdates.isEmpty() && viewedUpdates.isEmpty()) {
-            item(key = "empty_status_hint") {
-                EmptyIllustrationState(
-                    title = "No status updates yet",
-                    subtitle = "Share a text, photo, or video update that stays live for 24 hours.",
-                    actionLabel = "Add Status Update",
-                    onAction = onCreateStatus
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatusContactRow(
-    userName: String,
-    photoUrl: String?,
-    timeText: String,
-    isViewed: Boolean,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        UserAvatar(
-            name = userName,
-            photoUrl = photoUrl,
-            size = 54.dp,
-            hasStatusRing = true,
-            statusViewed = isViewed
-        )
-        Spacer(modifier = Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = userName,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = timeText,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            currentIndex = matchIndex + needle.length
         }
     }
 }
@@ -1252,7 +1269,7 @@ private fun NewChatUserDiscoverySheet(
 private fun TabIcon(tab: HomeTab, selected: Boolean) {
     val icon = when (tab) {
         HomeTab.CHATS -> if (selected) Icons.AutoMirrored.Filled.Chat else Icons.AutoMirrored.Outlined.Chat
-        HomeTab.STATUS -> if (selected) Icons.Filled.DonutLarge else Icons.Outlined.DonutLarge
+        HomeTab.PHOTOS -> if (selected) Icons.Filled.PhotoLibrary else Icons.Outlined.PhotoLibrary
         HomeTab.CALLS -> if (selected) Icons.Filled.Call else Icons.Outlined.Call
     }
     Icon(icon, contentDescription = tabLabel(tab))
@@ -1261,6 +1278,6 @@ private fun TabIcon(tab: HomeTab, selected: Boolean) {
 @Composable
 private fun tabLabel(tab: HomeTab): String = when (tab) {
     HomeTab.CHATS -> stringResource(R.string.tab_chats)
-    HomeTab.STATUS -> stringResource(R.string.tab_status)
+    HomeTab.PHOTOS -> stringResource(R.string.tab_photos)
     HomeTab.CALLS -> stringResource(R.string.tab_calls)
 }

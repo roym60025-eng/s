@@ -1,6 +1,7 @@
 package com.example.notifications
 
 import android.Manifest
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -45,8 +46,14 @@ class BackgroundNotificationService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        isRunning = true
+        val brandBadge = NotificationBitmapHelper.cachedBrandBadgeBitmap
+
         val notification = NotificationCompat.Builder(this, CHANNEL_BACKGROUND_SYNC)
             .setSmallIcon(R.drawable.ic_notification)
+            .setLargeIcon(brandBadge)
+            .setColor(NotificationBitmapHelper.BRAND_EMERALD)
+            .setSubText("Live Sync")
             .setContentTitle(getString(R.string.bg_sync_notification_title))
             .setContentText(getString(R.string.bg_sync_notification_body))
             .setOngoing(true)
@@ -54,6 +61,7 @@ class BackgroundNotificationService : Service() {
             .setShowWhen(false)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentIntent(pendingIntent)
             .build()
 
@@ -74,6 +82,11 @@ class BackgroundNotificationService : Service() {
         return START_STICKY
     }
 
+    override fun onDestroy() {
+        isRunning = false
+        super.onDestroy()
+    }
+
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
         IncomingMessageSyncWorker.scheduleExpeditedCheck(applicationContext)
@@ -92,6 +105,7 @@ class BackgroundNotificationService : Service() {
                     setShowBadge(false)
                     setSound(null, null)
                     enableVibration(false)
+                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 }
                 manager.createNotificationChannel(channel)
             }
@@ -102,7 +116,12 @@ class BackgroundNotificationService : Service() {
         const val CHANNEL_BACKGROUND_SYNC = "channel_background_sync"
         private const val FOREGROUND_NOTIFICATION_ID = 9001
 
+        @Volatile
+        var isRunning: Boolean = false
+            private set
+
         fun start(context: Context) {
+            if (isRunning) return
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                 ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED
@@ -116,6 +135,8 @@ class BackgroundNotificationService : Service() {
         }
 
         fun stop(context: Context) {
+            if (!isRunning) return
+            isRunning = false
             runCatching {
                 context.stopService(Intent(context, BackgroundNotificationService::class.java))
             }
